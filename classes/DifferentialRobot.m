@@ -271,7 +271,7 @@ classdef DifferentialRobot < handle
             rob.x(2) = xp(2) + u(1)*rob.dt*sin(xp(3));
             rob.x(3) = xp(3) + u(2)*rob.dt;
             
-            odo = [sqrt(sum((rob.x(1:2)-xp(1:2)).^2)) rob.x(3)-xp(3)];
+            odo = [colnorm(rob.x(1:2)-xp(1:2)) rob.x(3)-xp(3)];
             rob.odometry = odo;
 
             rob.x_hist = [rob.x_hist; rob.x'];   % maintain history
