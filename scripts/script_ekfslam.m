@@ -17,6 +17,7 @@ ext.angularTolerance = 10.0;
 
 map = LandmarkMap('test');
 
+
 V = diag([0.005, 0.1*pi/180].^2);
 P0 = diag([0.05, 0.05, 0.01].^2);
 W = diag([0.05, 3*pi/180].^2);
