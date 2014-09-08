@@ -39,9 +39,9 @@ while dlog.availableData()
                t = toc;
                tt = 0.1 * t + 0.9 * tt;
                total = total + t;
-               %num2str(tt)
+               num2str(tt);
             end
-            %set(h, 'CData', gm.map);
+     %       set(h, 'CData', gm.map);
             
    end  
     %drawnow;

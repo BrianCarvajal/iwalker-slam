@@ -1,8 +1,12 @@
-classdef LandmarkExtractor < handle
-    %UNTITLED Summary of this class goes here
-    %   Detailed explanation goes here
-    
+%LandmarkExtractor SLAM's landmark extractor
+%
+%   This class extracts landmarks from range data of a LIDAR sensor.
+%
+%
 
+classdef LandmarkExtractor < handle
+
+  
     properties
         
         %% Paremeters of the algorithm

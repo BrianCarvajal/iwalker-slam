@@ -24,7 +24,7 @@ classdef GridMap < handle
     
     properties (SetAccess = private)
         resMap  % size of each cell, in m
-        sizeMap        % size of the map, in
+        sizeMap        % size of the map, in 
         map         % a NxM matrix
         origin
         pfree
@@ -36,27 +36,25 @@ classdef GridMap < handle
     methods
         function gm = GridMap(sizeMap, resMap)
             if ~isequal(size(sizeMap), [1 2])
-                error('size must be a 1x2 vector');
+               error('size must be a 1x2 vector'); 
             end
             if resMap <= 0
-                error('resolution must be greather than 0');
+               error('resolution must be greather than 0');
             end
             gm.resMap = resMap;
             gm.sizeMap = sizeMap;
             gm.origin = (sizeMap/2/resMap);
             
-            % figure size of the matrix
+            % figure size of the matrix 
             n = floor(sizeMap(1)/resMap);
             m = floor(sizeMap(2)/resMap);
-            
+
             if (n < 1) || (m < 1)
                 error('resolution must be less than size');
             end
             
-            gm.map = zeros(m, n, 'double');
+            gm.map = zeros(m, n, 'double'); 
             gm.map(:) = 0.5;
-            
-            
             
             gm.pfree = 0.9;
             gm.pocc = 1 - gm.pfree;
@@ -67,7 +65,7 @@ classdef GridMap < handle
         
         function [i, j] = getIndex(gm, p)
             if ~ gm.isInsideMap(p)
-                error('Point outside the map');
+               error('Point outside the map'); 
             end
             
             x = round(p./gm.resMap + gm.origin);
@@ -81,41 +79,46 @@ classdef GridMap < handle
         end
         
         function b = isInsideMap(gm, p)
-            b = p(1) > -gm.sizeMap(1)/2 && ...
-                p(1) <  gm.sizeMap(1)/2 && ...
-                p(2) > -gm.sizeMap(2)/2 && ...
-                p(2) <  gm.sizeMap(2)/2;
+           b = p(1) > -gm.sizeMap(1)/2 && ...
+               p(1) <  gm.sizeMap(1)/2 && ...
+               p(2) > -gm.sizeMap(2)/2 && ...
+               p(2) <  gm.sizeMap(2)/2;
         end
         
         function setBeam(gm, s, z, intercept)
-            c1 = gm.getIndex(s);
-            c2 = gm.getIndex(z);
-            [I,J] = rasterize_line(c1, c2);
-            ind = sub2ind(size(gm.map), I, J);
+             c1 = gm.getIndex(s);
+             c2 = gm.getIndex(z);
+             [I,J] = rasterize_line(c1, c2);                      
+             ind = sub2ind(size(gm.map), I, J);
+             
+%              pfree = 0.9;
+%              pocc = 1 - pfree;
+%              lfree = logit(pfree);
+%              locc = logit(pocc);
+             
             
-%           Vectorized code
-            gm.map(ind(1:end-1)) = GridMap.updateCell(gm.map(ind(1:end-1)), gm.lfree);
-            llast = intercept * gm.locc + ~intercept * gm.lfree;
-            gm.map(ind(end)) = GridMap.updateCell(gm.map(ind(end)), llast);
-            
-%           Straightforward code
-%             for k = 1 : length(ind) - 1
-%                 i = ind(k);
-%                 gm.map(i) = GridMap.updateCell(gm.map(i), gm.lfree);
-%             end
-%             if intercept
-%                 gm.map(ind(end)) = GridMap.updateCell(gm.map(ind(end)), gm.locc);
-%             else
-%                 gm.map(ind(end)) = GridMap.updateCell(gm.map(ind(end)), gm.lfree);
-%             end                                 
+             
+%              for k = 1 : length(ind) - 1
+%                  i = ind(k);                 
+%                  gm.map(i) = GridMap.updateCell(gm.map(i), gm.lfree);
+%              end
+             gm.map(ind(1:end-1)) = GridMap.updateCell(gm.map(ind(1:end-1)), gm.lfree);
+             
+             
+             zi = ind(end);
+             if intercept
+                gm.map(ind(end)) = GridMap.updateCell(gm.map(zi), gm.locc);
+             else
+                 gm.map(ind(end)) = GridMap.updateCell(gm.map(zi), gm.lfree);
+             end
         end
     end
     
     methods (Static)
         function P = updateCell(Pprev, lsensor)
-            lprev = logit(Pprev);
-            lcurr = lprev + lsensor;
-            P = 1 - (1 ./ (1 + exp(lcurr)));
+           lprev = logit(Pprev);
+           lcurr = lprev + lsensor;
+           P = 1 - (1 / (1 + exp(lcurr)));
         end
     end
     
