@@ -4,5 +4,6 @@
 *.rar
 
 # Directories
+/unversioned
 
 # Files
