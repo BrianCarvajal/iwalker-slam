@@ -4,7 +4,7 @@
 
 close all;
 
-dlog = DataLog('D:\Brian\fib\pfc\matlab\mapping\data\laser_essai.mat');
+dlog = DataLog('iwalker-slam\data\laser_dataset08.mat');
 
 lid = LIDAR();
 rob = DifferentialRobot();

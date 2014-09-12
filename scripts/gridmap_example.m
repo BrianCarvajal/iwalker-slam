@@ -2,7 +2,7 @@
 %clear all;
 close all;
 
-dlog = DataLog('D:\Brian\fib\pfc\matlab\mapping\data\laser_essai.mat');
+dlog = DataLog('iwalker-slam\data\laser_dataset07.mat');
 
 lid = LIDAR();
 rob = DifferentialRobot();
@@ -41,9 +41,10 @@ while dlog.availableData()
                total = total + t;
                %num2str(tt)
             end
-            %set(h, 'CData', gm.map);
+            set(h, 'CData', gm.map);
             
    end  
-    %drawnow;
+    %
+    drawnow;
 end
 
