@@ -7,8 +7,11 @@
 *.autosave
 *.original
 *.asv
+*.m.*
+*.slx.*
 
 # Directories
 unversioned/
 slprj/
+
 # Files
