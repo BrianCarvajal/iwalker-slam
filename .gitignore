@@ -6,8 +6,9 @@
 *.asv
 *.autosave
 *.original
+*.asv
 
 # Directories
-/unversioned
-
+unversioned/
+slprj/
 # Files
