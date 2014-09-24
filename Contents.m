@@ -1,3 +1,0 @@
-% IWALKER-SLAM
-%
-% Files
