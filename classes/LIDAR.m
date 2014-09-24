@@ -83,10 +83,11 @@ classdef LIDAR < handle
                 lid.lupsin(i) = sin(lid.angle(i));
                 lid.lupcos(i) = cos(lid.angle(i));
             end
+            lid.setRangeData(zeros(1,682), 0);
         end
         
         
-        function setRangeData(lid, range, timestamp)
+        function p = setRangeData(lid, range, timestamp)
         %LIDAR.setRangeData Set new range data
         %
         % lid.setRangeData(R, T) sets new range data R with timestamp T        
@@ -100,6 +101,7 @@ classdef LIDAR < handle
             lid.timestamp = double(timestamp);
             lid.range = double(range);
             lid.p = [lid.range .* lid.lupcos; lid.range .* lid.lupsin];
+            p = lid.p;
 %             if ~isempty(lid.robot)
 %                 rob = lid.robot;
 %                 T = se2(rob.x(1), rob.x(2), rob.x(3)) * se2(lid.x(1), lid.x(2), lid.x(3));
@@ -136,7 +138,7 @@ classdef LIDAR < handle
             end
         end
         
-        function plot_range(lid, hg)
+        function plot_range(lid, hg)                      
             if nargin < 2 ||  ~ishghandle(hg)
                 hg = gcf;
             end
@@ -145,19 +147,23 @@ classdef LIDAR < handle
             if isempty(p)
                 return
             end
+            
+            
+            
             xr = lid.robot.x;
             T = se2(xr(1), xr(2), xr(3));
             p = T * [p; ones(1, size(p,2));];
   
 
+   
             h = findobj(hg, 'Tag', 'plot.Range');
             
             if isempty(h)
                 h = scatter(p(1,:), p(2,:), 1,'o', 'fill');
                 set(h, 'Tag', 'plot.Range');
             else
-                x = [p(1,:) get(h, 'XData')];
-                y = [p(2,:) get(h, 'YData')];
+                x = p(1,:);
+                y = p(2,:);
                 set(h, 'XData', x, 'YData', y);
             end
             

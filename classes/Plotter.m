@@ -177,6 +177,20 @@ classdef Plotter < handle
             end
         end
         
+        function plotPoints(pl, X, Y, tag, color)
+            if ~ishghandle(pl.ha)
+                pl.ha = Plotter.newAxes();
+            end
+            
+            h = findobj(pl.ha, 'Tag', tag);
+            if isempty(h)
+                h = plot(X, Y, color, 'MarkerSize', 1, 'LineStyle', '.');
+                set(h, 'Tag', tag);
+            else
+                set(h, 'XData', X, 'YData', Y);
+            end
+        end
+        
         
         
         

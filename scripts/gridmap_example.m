@@ -2,7 +2,7 @@
 %clear all;
 close all;
 
-dlog = DataLog('iwalker-slam\data\laser_dataset07.mat');
+dlog = DataLog('iwalker-slam\data\laser_essai.mat');
 
 lid = LIDAR();
 rob = DifferentialRobot();
