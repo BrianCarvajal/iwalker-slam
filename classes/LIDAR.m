@@ -15,7 +15,7 @@
 %
 % Properties (readonly)::
 %   data_length     number of points sensed
-%   angle           angles of the sensed points
+%   ang           angs of the sensed points
 %   range           ranges of the sensed points
 %   timestamp       acquisition time, expressed in seconds
 %
@@ -31,16 +31,16 @@ classdef LIDAR < handle
     end
     
     properties (SetAccess = private)
-        data_length     % number of points sensed
-        angle           % angles of the sensed points
-        range           % ranges of the sensed points
+        data_length = 682;     % number of points sensed
+        ang = zeros(1, 682);      % angles of the sensed points
+        range = zeros(1, 682);        % ranges of the sensed points
         timestamp       % acquisition time, expressed in seconds
-        p               % cartesian points
+        p       = zeros(2, 682);        % cartesian points
     end
     
     properties (Access = private)
-        lupsin            % lookup table for sin
-        lupcos            % lookup table for cos
+        lupsin = zeros(1, 682);            % lookup table for sin
+        lupcos = zeros(1, 682);           % lookup table for cos
     end
     
     methods
@@ -78,10 +78,11 @@ classdef LIDAR < handle
             lid.data_length = 682;
             lid.plotTag = 'LIDAR.plot';
             % precalculate the angles for cartesian conversion
+            
             for i = 1 : lid.data_length
-                lid.angle(i) = ((0.3515625 *(i - 1)) - 120) * pi / 180.0;
-                lid.lupsin(i) = sin(lid.angle(i));
-                lid.lupcos(i) = cos(lid.angle(i));
+                lid.ang(i) = ((0.3515625 *(i - 1)) - 120) * pi / 180.0;
+                lid.lupsin(i) = sin(lid.ang(i));
+                lid.lupcos(i) = cos(lid.ang(i));
             end
             lid.setRangeData(zeros(1,682), 0);
         end

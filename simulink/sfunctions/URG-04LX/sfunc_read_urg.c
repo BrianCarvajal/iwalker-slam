@@ -43,12 +43,14 @@ void openURG(unsigned char COMnumber){
         dcb.ByteSize = 8;
         dcb.Parity = NOPARITY;
         dcb.StopBits = ONESTOPBIT;
-        if (verbose) mexPrintf("Open Port\n");
+        if (verbose) mexPrintf("Opening Port...");
         SetCommState(hCom, &dcb);
+        if (verbose) mexPrintf(" Ok!\n");
     }
     else {
         if (verbose) mexPrintf("Error opening Port\n");
     }
+    
 }
 
 int readURG(unsigned char *buf, int size) {
@@ -170,7 +172,7 @@ static void mdlInitializeSampleTimes(SimStruct *S) {
     else
     {
         sampleTime=*((double*)(mxGetData(array_ptr)));
-        mexPrintf("Usando variable SampleTime con valor = f\n", sampleTime);
+        mexPrintf("Usando variable SampleTime con valor = %f\n", sampleTime);
     }
     //sampleTime = *sampleTimeTmp;
     /* Destroy array */
@@ -221,9 +223,9 @@ static void mdlStart(SimStruct *S) {
         tmp=(double*)(mxGetData(array_ptr));
         verbose=(int)(*tmp);
         if (verbose) {
-            mexPrintf("Verbose activado");
+            mexPrintf("Verbose activado\n");
         } else {
-            mexPrintf("Verbose desactivado");
+            mexPrintf("Verbose desactivado\n");
         }
     }   
     /* Destroy array */

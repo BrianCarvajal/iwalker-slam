@@ -109,7 +109,23 @@ classdef GridMap < handle
 %                 gm.map(ind(end)) = GridMap.updateCell(gm.map(ind(end)), gm.lfree);
 %             end                                 
         end
+        
+        function map = update(gm, lid,  xr, p) 
+            T = se2(xr(1), xr(2), xr(3)) * se2(0.6, 0, 0);disp('.');
+            p = pTransform(p, T);disp('.');
+            xs = pTransform([0.6; 0], T);disp('.');
+            for i = 1:length(p)
+                if lid.range(i) > 0.02
+                    gm.setBeam(xs', p(:,i)', lid.range(i) < 3.8);
+                end
+            end
+            disp('.');
+            map = gm.map;disp('.');
+        end
+        
     end
+    
+    
     
     methods (Static)
         function P = updateCell(Pprev, lsensor)
