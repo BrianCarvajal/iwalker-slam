@@ -12,7 +12,7 @@
  *  $Revision: 1.12.4.2 $
  */
 
-#define S_FUNCTION_NAME canReadTrama
+#define S_FUNCTION_NAME canWriteTrama
 #define S_FUNCTION_LEVEL 2
 
 #include "simstruc.h"
@@ -40,14 +40,13 @@ static void mdlInitializeSizes(SimStruct *S)
     }
 
     ssSetNumContStates(S, 0);
-    ssSetNumDiscStates(S, 10);
+    ssSetNumDiscStates(S, 11);
 
     if (!ssSetNumInputPorts(S, 1)) return;
-    ssSetInputPortWidth(S, 0, 1);
+    ssSetInputPortWidth(S, 0, 10);
     ssSetInputPortDirectFeedThrough(S, 0, 0);
 
-    if (!ssSetNumOutputPorts(S, 1)) return;
-    ssSetOutputPortWidth(S, 0, 8);
+    if (!ssSetNumOutputPorts(S, 0)) return;
 
     ssSetNumSampleTimes(S, 1);
     ssSetNumRWork(S, 0);
@@ -69,28 +68,28 @@ static void mdlInitializeSizes(SimStruct *S)
  */
 static void mdlInitializeSampleTimes(SimStruct *S)
 {
-    mxArray *array_ptr;
-    double sampleTime;
-    
-    // Leemos el sample time definido por el usuario
-    array_ptr = mexGetVariable("caller", "SampleTime");
+    InputRealPtrsType uPtrs = ssGetInputPortRealSignalPtrs(S,0);
+mxArray *array_ptr;
+double *tsTmp;
+time_T sampleTime;
+
+    array_ptr = mexGetVariable("base", "Ts");
     if (array_ptr == NULL ){
-        mexPrintf("canReadTrama: No se encontro la variable SampleTime. Se usará 0.01\n");
-        sampleTime = 0.01;
+	    mexPrintf("No se encontro la variable Ts\n");
+        sampleTime=0.001; // valor por defecto. Aunque no llegara a ejecutarse
+                          // porque se quejara el parametro Ts del Solver Parameters
     }
     else
     {
-        sampleTime=*((double*)(mxGetData(array_ptr)));
-        mexPrintf("canReadTrama: Usando variable SampleTime con valor = %f\n", sampleTime);
+        tsTmp=(double*)(mxGetData(array_ptr));
+        sampleTime=(time_T)(*tsTmp);
+        mexPrintf("Block 'canWriteTrama' has get the sample time from workspace: %f sec.\n",(double)sampleTime);
     }
-    //sampleTime = *sampleTimeTmp;
     /* Destroy array */
     mxDestroyArray(array_ptr);
-    
-    
+
     ssSetSampleTime(S, 0, sampleTime);
     ssSetOffsetTime(S, 0, 0.0);
-    ////
 }
 
 #define MDL_INITIALIZE_CONDITIONS
@@ -102,8 +101,8 @@ static void mdlInitializeConditions(SimStruct *S)
 {
     InputRealPtrsType uPtrs = ssGetInputPortRealSignalPtrs(S,0);
     real_T *x0 = ssGetRealDiscStates(S);
-    mxArray *array_ptr;
-    int *handleTmp;
+mxArray *array_ptr;
+int *handleTmp;
 
     UNUSED_ARG(S); /* unused input argument */
 
@@ -116,10 +115,11 @@ static void mdlInitializeConditions(SimStruct *S)
     x0[7]=0; 
     x0[8]=0; 
     x0[9]=0; 
+    x0[10]=0; 
 
     array_ptr = mexGetVariable("base", "handleCAN");
     if (array_ptr == NULL ){
-	    mexPrintf("No se encontro la variable handleCAN al inicializar el bloque de LECTURA de tramas %d\n",(int)(U(0)));
+	    mexPrintf("No se encontro la variable handleCAN al inicializar el bloque de ESCRITURA de tramas %d\n",(int)(U(0)));
         x0[1]=-1;
     }
     else
@@ -130,6 +130,8 @@ static void mdlInitializeConditions(SimStruct *S)
     /* Destroy array */
     mxDestroyArray(array_ptr);
 }
+
+
 
 /* Function: mdlOutputs =======================================================
  * Abstract:
@@ -142,17 +144,6 @@ static void mdlOutputs(SimStruct *S, int_T tid)
     InputRealPtrsType uPtrs = ssGetInputPortRealSignalPtrs(S,0);
  
     UNUSED_ARG(tid); /* not used in single tasking mode */
-
-    //ahora el #NOMSG (x[0]) no sale hacia afuera. Tenerlo en cuenta por si se
-    //quisiera en un futuro
-    y[0]=x[2];
-    y[1]=x[3];
-    y[2]=x[4];
-    y[3]=x[5];
-    y[4]=x[6];
-    y[5]=x[7];
-    y[6]=x[8];
-    y[7]=x[9];
 }
 
 
@@ -167,73 +158,57 @@ static void mdlUpdate(SimStruct *S, int_T tid)
     real_T            *x       = ssGetRealDiscStates(S);
     InputRealPtrsType uPtrs    = ssGetInputPortRealSignalPtrs(S,0);
 
+CANMsg message;     
 CANHANDLE hndCAN;
-//canStatus statCAN;
 int statCAN;
+
+
+
 long id=0;
 unsigned int dlc=0;
-unsigned int flg=0;
 unsigned int i=0;
-DWORD time=0;
 
-CANMsg message;  
-message.id=id;
-message.timestamp=0;
-message.flags=0;
-message.len=8;
-
-for (i=0;i<8;i++) message.data[i]=0;
- 
-
-    UNUSED_ARG(tid); /* not used in single tasking mode */
-
+    UNUSED_ARG(tid); // not used in single tasking mode
+    
     hndCAN=(CANHANDLE)(x[1]);
-    if (hndCAN>0)
-    {
-        //mexPrintf("Leyendo de CAN\n");
+    //if (hndCAN>=0)
+    //{
+        // DLC viene como un parametro mas de input port: x[1]
         id=(long)(U(0));
-        //message.id=id;
-               
-        do {
-            
-            statCAN=canusb_ReadFirst(hndCAN,id,0,&message);
-            //mexPrintf("statCAN vale %d\n",statCAN);
-            
-            if (statCAN==ERROR_CANUSB_NO_MESSAGE)
-            {
-                
-                x[0]=x[0]+1;
-            }
-            else
-            {
-                //mexPrintf("Id trama: %d\n",message.id);
-                x[2]=(real_T)((unsigned char)(message.data[0]));
-                //mexPrintf("Byte0 vale: %d\n",message.data[0]);
-                x[3]=(real_T)((unsigned char)(message.data[1]));
-                //mexPrintf("Byte1 vale: %d\n",message.data[1]);
-                x[4]=(real_T)((unsigned char)(message.data[2]));
-                //mexPrintf("Byte2 vale: %d\n",message.data[2]);
-                x[5]=(real_T)((unsigned char)(message.data[3]));
-                //mexPrintf("Byte3 vale: %d\n",message.data[3]);
-                x[6]=(real_T)((unsigned char)(message.data[4]));
-                //mexPrintf("Byte4 vale: %d\n",message.data[4]);
-                x[7]=(real_T)((unsigned char)(message.data[5]));
-                //mexPrintf("Byte5 vale: %d\n",message.data[5]);
-                x[8]=(real_T)((unsigned char)(message.data[6]));
-                //mexPrintf("Byte6 vale: %d\n",message.data[6]);
-                x[9]=(real_T)((unsigned char)(message.data[7]));
-                //mexPrintf("Byte7 vale: %d\n",message.data[7]);
-            }
-        } while (statCAN==ERROR_CANUSB_OK);
-    }
-    // handleCAN == 0, devolvemos todo 0
-    else {
-        mexPrintf("CAN no conectado, devolviendo todo 0\n");
-        for (i = 2; i <= 9; i++) {
-            x[i] = 0;
+        dlc=(unsigned int)(U(1));
+        
+        message.id=id;
+        message.timestamp=0;
+        message.flags=0;
+        message.len=3;
+       
+        for (i=0;i<dlc;i++)
+            message.data[i]=(unsigned char)(U(2+i));
+        for (i=dlc;i<8;i++)
+            message.data[i]=0; 
+        
+        //message.data[0]=30;
+        //message.data[1]=20;
+          
+        if (dlc>0) statCAN=canusb_Write(hndCAN, &message);
+        
+        //else
+        //    statCAN=canWrite(hndCAN, id, (void*)msg);
+
+//mexPrintf("msg={%u,%u,%u,%u,%u,%u,%u,%u}\n",msg[0],msg[1],msg[2],msg[3],msg[4],msg[5],msg[6],msg[7]);
+//mexPrintf("canWrite(%d,%d,(void*)msg,%d,canMSG_STD);\n",hndCAN, id, dlc);
+        // En el caso del canWrite, retorna inmediatamente.
+        // Eso no garantiza que el mensaje se haya enviado. Ha sido colocado 
+        // en la cola de salida, y se enviara cuando pueda.
+
+        // En x[0] recogemos el numero de veces que la llamada no ha ido bien.
+        if (statCAN<=0)
+        {
+            x[0]=x[0]+1;
         }
-    }
-    //mexPrintf("salen\n");
+    //}
+
+
 }
 
 
