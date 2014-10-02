@@ -1,8 +1,5 @@
-function stepWheelsUpdate(rpm, rob, ekf)
-    
-    rpm = double(rpm)/100;
-    odo = rob.updateDifferential(rpm);
-    tic;
-    %ekf.prediction(odo);   
+function stepWheelsUpdate(odo, rob, ekf)    
+    rob.updateOdometry(odo);
+    ekf.prediction(odo);
 end
 

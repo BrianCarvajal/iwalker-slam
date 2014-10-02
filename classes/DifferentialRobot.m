@@ -215,6 +215,9 @@ classdef DifferentialRobot < handle
            T = se2(rob.x(1), rob.x(2), rob.x(3)); 
         end
         
+        function setX(rob, x)
+            rob.x = x;
+        end
 
         function xnext = f(rob, x, odo, w)
             %DifferentialRobot.f Predict next state based on odometry
@@ -233,17 +236,18 @@ classdef DifferentialRobot < handle
             dd = odo(1) + w(1); 
             dth = odo(2);
 
-            % straightforward code:
-            % thp = x(3) + dth;
-            % xnext = zeros(1,3);
-            % xnext(1) = x(1) + (dd + w(1))*cos(thp);
-            % xnext(2) = x(2) + (dd + w(1))*sin(thp);
-            % xnext(3) = x(3) + dth + w(2);
-            %
-            % vectorized code:
+%             % straightforward code:
+%             % thp = x(3) + dth;
+%             % xnext = zeros(1,3);
+%             % xnext(1) = x(1) + (dd + w(1))*cos(thp);
+%             % xnext(2) = x(2) + (dd + w(1))*sin(thp);
+%             % xnext(3) = x(3) + dth + w(2);
+%             %
+%             % vectorized code:
 
             thp = x(:,3) + dth;
             xnext = x + [(dd+w(1))*cos(thp)  (dd+w(1))*sin(thp) ones(size(x,1),1)*dth+w(2)];
+            %xnext = rob.x';
         end
 
         function odo = update(rob, u, w)
@@ -272,6 +276,10 @@ classdef DifferentialRobot < handle
             rob.x(3) = xp(3) + u(2)*rob.dt;
             
             odo = [colnorm(rob.x(1:2)-xp(1:2)) rob.x(3)-xp(3)];
+            % If speed is negative, the odometry must be negative too
+            if u(1) < 0
+               odo(1) = -odo(1); 
+            end
             rob.odometry = odo;
 
             rob.x_hist = [rob.x_hist; rob.x'];   % maintain history
@@ -298,6 +306,15 @@ classdef DifferentialRobot < handle
             steer = (vR - vL) / rob.S;
                                 
             odo = rob.update([speed, steer], u);
+        end
+        
+        function odo = updateOdometry(rob, odo)
+            rob.x = rob.f(rob.x', odo)';
+
+            rob.odometry = odo;
+            rob.w = [0 0];
+            rob.x_hist = [rob.x_hist; rob.x'];   % maintain history
+            rob.w_hist = [rob.w_hist; rob.w];
         end
 
 

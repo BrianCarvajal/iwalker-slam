@@ -56,7 +56,7 @@ void openURG(unsigned char COMnumber){
 int readURG(unsigned char *buf, int size) {
     
     unsigned long aux=size;
-    //if (verbose) mexPrintf("ReadURG\n");
+    if (verbose) mexPrintf("ReadURG\n");
     if (ReadFile(hCom,
             buf,
             size,
@@ -67,17 +67,9 @@ int readURG(unsigned char *buf, int size) {
     }
     if (aux > 0)
     {
-        //if (verbose) mexPrintf("Read - %c\n",buf);
-        // buf[size] = NULL; // Assign end flag of message.
         return (int)aux;
     }
     return (int)0-aux;
-    //return 0-size; //??????????
-    /* int aux = 1;
-     * #ifndef MEX_PATCH
-     * aux = rt_spread(ss_port, buf, size);
-     * #endif
-     * return 0 - aux;*/
 }
 
 int urg_start_single_scan(void) {
@@ -86,15 +78,14 @@ int urg_start_single_scan(void) {
     char msg[256];
     sprintf(msg,"MS0044072500001\r");
     
-    // if (verbose) mexPrintf("Sending text: %s\n", msg);
-    if(!WriteFile(hCom, msg, strlen(msg),
-            &dwBytesWritten, NULL))
+    if (verbose) mexPrintf("Sending text: %s\n", msg);
+    if(!WriteFile(hCom, msg, strlen(msg), &dwBytesWritten, NULL))
     {
         if (verbose) mexPrintf( "Error writing text to %s\n", msg);
     }
     else
     {
-        //  if (verbose) mexPrintf( "%d bytes written\n", dwBytesWritten);
+       if (verbose) mexPrintf( "%d bytes written\n", dwBytesWritten);
     }
     
     /* #ifndef MEX_PATCH

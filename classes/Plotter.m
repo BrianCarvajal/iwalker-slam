@@ -6,11 +6,11 @@ classdef Plotter < handle
         %% General properties
         ha              %axes handler
         
-        %% Robot properties 
+        %% Robot properties
         wRad = 0.100    % wheels radius
         wSep = 0.520    % wheels separation
     end
-           
+    
     methods (Static)
         
         function ha= newAxes()
@@ -25,73 +25,95 @@ classdef Plotter < handle
     methods
         function pl = Plotter(ha)
             if nargin < 1
-               ha = Plotter.newAxes();
+                ha = Plotter.newAxes();
             end
             pl.ha = ha;
         end
         
         
-        function plotRobot(pl, x, tag)
+        function plotRobot(pl, x, tag, color)
             if ~ishghandle(pl.ha)
                 pl.ha = Plotter.newAxes();
+            end
+            if nargin < 4
+               color = 'r'; 
             end
             h = findobj(pl.ha, 'Tag', tag);
             
             if isempty(h)
-                           
+                
                 h = hgtransform();
                 set(h, 'Tag', tag);  % tag it
                 
                 rx = pl.wRad;
                 ry = pl.wRad/4;
                 S = pl.wSep;
-
+                
                 hp = [];
                 %% center of robot
                 %hp = [hp scatter(0, 0, 50, 'ro')];
                 
                 
-                %% frame              
+                %% frame
+                %triangle
                 xx = [0 0.6  0 0];
                 yy = [S/2 0 -S/2 S/2];
-                hp = [hp patch( xx, yy, 'r', 'EdgeColor', 'none')];
+                hp = [hp patch( xx, yy, color, 'EdgeColor', 'none')];
+                % walker
+%                 xx = [0.2 0.58 0.58 0.2 0.2];
+%                 yy = [S/2 S/2.1 -S/2.1 -S/2 S/2];
+%                 hp = [hp patch( xx, yy, color, 'EdgeColor', 'none')];
+%                 xx = [0 0.2 0.2 0 0];
+%                 yy = [S/2 S/2 S/2-0.05 S/2-0.05 S/2];
+%                 hp = [hp patch( xx, yy, color, 'EdgeColor', 'none')];
+%                 xx = [0 0.2 0.2 0 0];
+%                 yy = [-S/2 -S/2 -S/2+0.05 -S/2+0.05 -S/2];
+%                 hp = [hp patch( xx, yy, color, 'EdgeColor', 'none')];
                 
                 %% wheels
                 xx = [-rx -rx rx  rx -rx];
-                yy = [-ry  ry ry -ry -ry];                
+                yy = [-ry  ry ry -ry -ry];
                 hp = [hp patch( xx, yy + S/2, [0.7 0.7 0.7], 'EdgeColor', 'none')];
                 hp = [hp patch( xx, yy - S/2, [0.7 0.7 0.7], 'EdgeColor', 'none')];
                 
-                                                                
+                %% laser
+%                 theta=linspace(0,2*pi,10); %100 evenly spaced points between 0 and 2pi
+%                 rho=ones(1,10)*0.03; %Radius should be 1 for all 100 points
+%                 [xx,yy] = pol2cart(theta,rho);
+%                 xx = xx + 0.56;
+%                 hp = [hp patch( xx, yy, 'y', 'EdgeColor', 'none')];
+                
+                
+                
                 for hh=hp
                     set(hh, 'Parent', h);
                     set(hh, 'Tag', [tag '.chunk']);
                 end
             end
             
-            set(h, 'Matrix', transl([x(1:2)' 0]) * trotz (x(3)));           
+            set(h, 'Matrix', transl([x(1:2)' 0]) * trotz (x(3)));
         end
         
         function plotTrace(pl, x, tag, color)
             if isempty(x)
-               return; 
+                return;
             end
             if ~ishghandle(pl.ha)
                 pl.ha = Plotter.newAxes();
             end
             h = findobj(pl.ha, 'Tag', tag);
             if isempty(h)
-               h = plot(x(:,1), x(:,2), 'Color', color);
-               set(h, 'Tag', tag);
+                h = plot(x(:,1), x(:,2), 'Color', color);
+                set(h, 'Tag', tag);
             else
                 set(h, 'XData', x(:,1), 'YData', x(:,2), 'Color', color);
             end
         end
         
-        function plotLandmark(pl, lans, tag)           
+        function plotLandmark(pl, lans, tag)
             if ~ishghandle(pl.ha)
                 pl.ha = Plotter.newAxes();
-            end  
+            end
             
             for lan = lans
                 u1 = lan.u1 * 0.1;
@@ -114,7 +136,7 @@ classdef Plotter < handle
                 else
                     set(h, 'XData', X, 'YData', Y, 'Color', color);
                 end
-
+                
             end
         end
         
@@ -127,15 +149,15 @@ classdef Plotter < handle
                 pl.ha = Plotter.newAxes();
             end
             
-           
-        
+            
+            
             % define points on a unit circle
             th = linspace(0, 2*pi, 50);
             pc = [cos(th);sin(th)];
-
+            
             % warp it into the ellipse
             pe = sqrtm(Pxy)*pc;
-
+            
             % offset it to optional non-zero centre point
             centre = xv(1:2);
             pe = bsxfun(@plus, centre(1:2), pe);
@@ -155,19 +177,19 @@ classdef Plotter < handle
                 pl.ha = Plotter.newAxes();
             end
             
-           ea = sqrt(Pa);
-           angle = xv(3);
-           th = linspace(angle + ea/2, angle - ea/2, ceil(ea*180/pi));
-           pe = [cos(th);sin(th)];
-        
+            ea = sqrt(Pa);
+            angle = xv(3);
+            th = linspace(angle + ea/2, angle - ea/2, ceil(ea*180/pi));
+            pe = [cos(th);sin(th)];
+            
             % offset it to optional non-zero centre point
             centre = xv(1:2);
-
+            
             pe = bsxfun(@plus, centre(1:2), pe);
-            x = [xv(1) pe(1,:) xv(1)]; 
+            x = [xv(1) pe(1,:) xv(1)];
             y = [xv(2) pe(2,:) xv(2)];
             
-                       
+            
             h = findobj(pl.ha, 'Tag', tag);
             if isempty(h)
                 h = patch(x, y, color, 'FaceAlpha', 0.5, 'EdgeColor', 'none');
@@ -191,10 +213,47 @@ classdef Plotter < handle
             end
         end
         
-        
-        
-        
+        function plotSplitAndMerge(pl, Res, tag)
+            if ~ishghandle(pl.ha)
+                pl.ha = Plotter.newAxes();
+            end
+            p = Res.p;
+          
+            L = Res.edges;
+            X = [];
+            Y = [];
+            for i = 1: size(L,2)
+                X = [X p(1, L(:,i)) NaN];
+                Y = [Y p(2, L(:,i)) NaN];               
+            end
+            
+            h = findobj(pl.ha, 'Tag', [tag '.line']);
+            if isempty(h)
+                h = line(X, Y, 'Color', 'r', 'LineWidth', 1);
+                set(h, 'Tag', [tag '.line']);
+            else
+                set(h, 'XData', X, 'YData', Y);
+            end
+            
+%             h = findobj(pl.ha, 'Tag', [tag '.endpoints']);
+%             if isempty(h)
+%                 h = scatter(X, Y, 50, 'co');
+%                 set(h, 'Tag', [tag '.endpoints']);
+%             else
+%                 set(h, 'XData', X, 'YData', Y);
+%             end
+                    
+            V = Res.vertices;
+            h = findobj(pl.ha, 'Tag', [tag '.vertices']);
+            if isempty(h)
+                h = scatter(p(1,V), p(2,V), 50, 'ro', 'fill');
+                set(h, 'Tag', [tag '.vertices']);
+            else
+                set(h, 'XData', p(1,V), 'YData', p(2,V));
+            end
+
+        end
     end
-    
+   
 end
 

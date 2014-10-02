@@ -35,37 +35,37 @@ static void mdlInitializeSizes(SimStruct *S)
 {
     BOOL out_qpf;
     LARGE_INTEGER tmp_qpf;
-
+    
     ssSetNumSFcnParams(S, 0);  /* Number of expected parameters */
     if (ssGetNumSFcnParams(S) != ssGetSFcnParamsCount(S)) {
         return; /* Parameter mismatch will be reported by Simulink */
     }
-
+    
     ssSetNumContStates(S, 0);
     ssSetNumDiscStates(S, 1);
-
+    
     if (!ssSetNumInputPorts(S, 0)) return;
     if (!ssSetNumOutputPorts(S, 1)) return;
     ssSetOutputPortWidth(S, 0, 1);
-
+    
     ssSetNumSampleTimes(S, 1);
     ssSetNumRWork(S, 0);
     ssSetNumIWork(S, 0);
     ssSetNumPWork(S, 0);
     ssSetNumModes(S, 0);
     ssSetNumNonsampledZCs(S, 0);
-
+    
     /* Take care when specifying exception free code - see sfuntmpl_doc.c */
 //    ssSetOptions(S, SS_OPTION_EXCEPTION_FREE_CODE);
-
-
-out_qpf = QueryPerformanceFrequency( &tmp_qpf);
-ticsPerSegon=tmp_qpf.QuadPart;
-printf("PerformanceCounter Frequency: %08X",(ticsPerSegon>>32)&0x0FFFFFFFF);
-printf("%08X\n",ticsPerSegon&0x0FFFFFFFF);
-
-primeraIteracio=1;
-
+    
+    
+    out_qpf = QueryPerformanceFrequency( &tmp_qpf);
+    ticsPerSegon=tmp_qpf.QuadPart;
+    printf("PerformanceCounter Frequency: %08X",(ticsPerSegon>>32)&0x0FFFFFFFF);
+    printf("%08X\n",ticsPerSegon&0x0FFFFFFFF);
+    
+    primeraIteracio=1;
+    
 }
 
 
@@ -77,24 +77,24 @@ primeraIteracio=1;
 static void mdlInitializeSampleTimes(SimStruct *S)
 {
     InputRealPtrsType uPtrs = ssGetInputPortRealSignalPtrs(S,0);
-mxArray *array_ptr;
-double *tsTmp;
-
-    array_ptr = mexGetVariable("base", "Ts");
+    mxArray *array_ptr;
+    double stTmp;
+    
+    // Leemos el sample time definido por el usuario
+    array_ptr = mexGetVariable("caller", "SampleTime");
     if (array_ptr == NULL ){
-	    mexPrintf("No se encontro la variable Ts\n");
-        sampleTime=0.001; // valor por defecto. Aunque no llegara a ejecutarse
-                          // porque se quejara el parametro Ts del Solver Parameters
+        mexPrintf("No se encontro la variable SampleTime. Se usará 0.001\n");
+        stTmp = 0.001;
     }
     else
     {
-        tsTmp=(double*)(mxGetData(array_ptr));
-        sampleTime=(time_T)(*tsTmp);
-        mexPrintf("Block 'sampleTimeSync' has get the sample time from workspace: %f sec.\n",(double)sampleTime);
+        stTmp=*((double*)(mxGetData(array_ptr)));
+        mexPrintf("Usando variable SampleTime con valor = %f\n", sampleTime);
     }
+    sampleTime = stTmp;
     /* Destroy array */
     mxDestroyArray(array_ptr);
-
+    
     ssSetSampleTime(S, 0, sampleTime);
     ssSetOffsetTime(S, 0, 0.0);
 }
@@ -107,25 +107,25 @@ double *tsTmp;
 static void mdlInitializeConditions(SimStruct *S)
 {
     real_T *x0 = ssGetRealDiscStates(S);
-
-    x0[0]=0; 
+    
+    x0[0]=0;
 }
 
 
 
 /* Function: mdlOutputs =======================================================
  * Abstract:
- *      y = Cx + Du 
+ *      y = Cx + Du
  */
 static void mdlOutputs(SimStruct *S, int_T tid)
 {
-
-    real_T *y = ssGetOutputPortRealSignal(S,0);
-    real_T *x = ssGetRealDiscStates(S);
+    
+    real_T            *y    = ssGetOutputPortRealSignal(S,0);
+    real_T            *x    = ssGetRealDiscStates(S);
 //    InputRealPtrsType uPtrs = ssGetInputPortRealSignalPtrs(S,0);
- 
+    
     UNUSED_ARG(tid); /* not used in single tasking mode */
-
+    
     y[0]=x[0];
 }
 
@@ -141,42 +141,42 @@ static void mdlUpdate(SimStruct *S, int_T tid)
 //    real_T            tempX[2] = {0.0, 0.0};
     real_T            *x       = ssGetRealDiscStates(S);
 //    InputRealPtrsType uPtrs    = ssGetInputPortRealSignalPtrs(S,0);
-BOOL out_qpf;
-LARGE_INTEGER tmp_qpf;
-LONGLONG ticsTarget;
-LONGLONG tmpTicsPeriode;
-
+    BOOL out_qpf;
+    LARGE_INTEGER tmp_qpf;
+    LONGLONG ticsTarget;
+    LONGLONG tmpTicsPeriode;
+    
     UNUSED_ARG(tid); /* not used in single tasking mode */
-
-/*
+    
+    /*
     x[0]=x[0]+U(0);
     x[1]=x[1]+U(1);
-*/
-
-if (primeraIteracio)
-{
-    primeraIteracio=0;
+     */
+    
+    if (primeraIteracio)
+    {
+        primeraIteracio=0;
+        out_qpf = QueryPerformanceCounter( &tmp_qpf);
+        ticsAnteriors=tmp_qpf.QuadPart;
+    }
+    
+    tmpTicsPeriode=ticsPerSegon/((LONGLONG)(1.0/sampleTime));
+    ticsTarget=ticsAnteriors+tmpTicsPeriode;
     out_qpf = QueryPerformanceCounter( &tmp_qpf);
-    ticsAnteriors=tmp_qpf.QuadPart;
-}
-
-tmpTicsPeriode=ticsPerSegon/((LONGLONG)(1.0/sampleTime));
-ticsTarget=ticsAnteriors+tmpTicsPeriode;
-out_qpf = QueryPerformanceCounter( &tmp_qpf);
 //if (tmp_qpf.QuadPart>ticsTarget)
 //    x[0]=101;
 //else
     x[0]=100-((ticsTarget-tmp_qpf.QuadPart)*100)/tmpTicsPeriode;
-
-do
-{
-    out_qpf = QueryPerformanceCounter( &tmp_qpf);
-} while(tmp_qpf.QuadPart<ticsTarget);
-ticsAnteriors=ticsTarget;
-
+    
+    do
+    {
+        out_qpf = QueryPerformanceCounter( &tmp_qpf);
+    } while(tmp_qpf.QuadPart<ticsTarget);
+    ticsAnteriors=ticsTarget;
+    
 //printf("Contador:  %08X",(ticsTarget>>32)&0x0FFFFFFFF);
 //printf("%08X\n",ticsTarget&0x0FFFFFFFF);
-
+    
 }
 
 
