@@ -228,7 +228,7 @@ for (i=0;i<8;i++) message.data[i]=0;
     }
     // handleCAN == 0, devolvemos todo 0
     else {
-        mexPrintf("CAN no conectado, devolviendo todo 0\n");
+        //mexPrintf("CAN no conectado, devolviendo todo 0\n");
         for (i = 2; i <= 9; i++) {
             x[i] = 0;
         }

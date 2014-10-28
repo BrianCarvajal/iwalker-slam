@@ -1,4 +1,4 @@
-function [FL, V] = splitAndMerge( p, threshold)
+function [FL, V] = splitAndMerge( p, threshold, maxOutliers)
 %splitAndMerge construct segments in a set of consecutive points
 %   [FL, V] = splitAndMerge(P, TS) return a pair vector FL and a vector V. 
 %   Each pair of the vector FL contains the first and the last index of the 
@@ -43,12 +43,24 @@ function [FL, V] = splitAndMerge( p, threshold)
         end
            
 %%4 If dP is less than a threshold, continue (go to 2)
-        [maxdP, peak] = max(dp);
-        if maxdP < threshold
-           FL = [FL s];
-    
+        numOutliers = 0;
+        do_split = true;
+        [maxdP, indexMax] = max(dp);
+        peak = indexMax;
+        while numOutliers < maxOutliers
+            %[maxdP, peak] = max(dp);
+            if maxdP < threshold
+                FL = [FL s];
+                do_split = false;
+                break;
+            else
+                dp(indexMax) = NaN;
+                [maxdP, indexMax] = max(dp);
+                numOutliers = numOutliers + 1;
+            end
+        end
 %%5 Otherwise, split si at P into si1 and si2, replace si in L by si1 and si2, continue (go to 2)
-        else
+        if do_split
             peak = s(1) + peak - 1;
             s1 = [s(1); peak];
             s2 = [peak; s(2)];

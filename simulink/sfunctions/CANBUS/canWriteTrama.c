@@ -88,7 +88,7 @@ time_T sampleTime;
     /* Destroy array */
     mxDestroyArray(array_ptr);
 
-    ssSetSampleTime(S, 0, sampleTime);
+    ssSetSampleTime(S, 0, -1);
     ssSetOffsetTime(S, 0, 0.0);
 }
 

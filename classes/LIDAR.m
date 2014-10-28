@@ -26,7 +26,7 @@ classdef LIDAR < handle
     
     properties
         robot           % robot where the LIDAR is attached
-        x               % pose relative to robot
+        T               % transform matrix to robot frame
         plotTag
     end
     
@@ -36,6 +36,8 @@ classdef LIDAR < handle
         range = zeros(1, 682);        % ranges of the sensed points
         timestamp       % acquisition time, expressed in seconds
         p       = zeros(2, 682);        % cartesian points
+        pw
+        x
     end
     
     properties (Access = private)
@@ -63,7 +65,7 @@ classdef LIDAR < handle
         % See also DifferentialRobot.
             if nargin == 0
                robot = [];
-               x = [];
+               T = se2(0,0,0);
             
             else
                 if isempty(robot) || ~isa(robot, 'DifferentialRobot')
@@ -74,9 +76,11 @@ classdef LIDAR < handle
                 end
             end
             lid.robot = robot;
-            lid.x = x;
+            lid.T = T;
             lid.data_length = 682;
             lid.plotTag = 'LIDAR.plot';
+            lid.x = [0 0];
+            
             % precalculate the angles for cartesian conversion
             
             for i = 1 : lid.data_length
@@ -87,6 +91,13 @@ classdef LIDAR < handle
             lid.setRangeData(zeros(1,682), 0);
         end
         
+        function T = globalTransform(lid)
+           if isempty(lid.robot)
+              T = lid.T;
+           else
+              T = lid.robot.globalTransform * lid.T;
+           end
+        end
         
         function p = setRangeData(lid, range, timestamp)
         %LIDAR.setRangeData Set new range data
@@ -99,9 +110,15 @@ classdef LIDAR < handle
             if length(range) ~= lid.data_length
                 error('Range lenght must be %d', lid.data_length);
             end
+            if nargin < 3
+               timestamp = 0; 
+            end
             lid.timestamp = double(timestamp);
             lid.range = double(range);
             lid.p = [lid.range .* lid.lupcos; lid.range .* lid.lupsin];
+            Tw = lid.globalTransform();
+            lid.pw = pTransform(lid.p, Tw);
+            lid.x = pTransform([0;0], Tw);
             p = lid.p;
 %             if ~isempty(lid.robot)
 %                 rob = lid.robot;
@@ -110,6 +127,7 @@ classdef LIDAR < handle
 %             end
             
         end
+        
         
         function h = plot(lid, hg)
             if nargin < 2 ||  ~ishghandle(hg)
@@ -130,7 +148,7 @@ classdef LIDAR < handle
 %                 hp = [hp fill(x,y,'r', 'EdgeColor', 'None')];
                 %%
                 
-                hp = [hp line([0 lid.x(1)], [0 lid.x(2)], 'Color', 'r', 'LineWidth', 3)];
+                %hp = [hp line([0 lid.x(1)], [0 lid.x(2)], 'Color', 'r', 'LineWidth', 3)];
                 
                 for hh=hp
                     set(hh, 'Parent', h);

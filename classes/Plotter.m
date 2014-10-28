@@ -16,7 +16,7 @@ classdef Plotter < handle
         function ha= newAxes()
             ha = gca;
             hold on;
-            axis equal;
+            %axis equal;
             grid on;
         end
         
@@ -44,6 +44,7 @@ classdef Plotter < handle
                 
                 h = hgtransform();
                 set(h, 'Tag', tag);  % tag it
+                set(h, 'Parent', pl.ha);
                 
                 rx = pl.wRad;
                 ry = pl.wRad/4;
@@ -58,7 +59,7 @@ classdef Plotter < handle
                 %triangle
                 xx = [0 0.6  0 0];
                 yy = [S/2 0 -S/2 S/2];
-                hp = [hp patch( xx, yy, color, 'EdgeColor', 'none')];
+                hp = [hp patch( xx, yy, color, 'EdgeColor', color./2)];
                 % walker
 %                 xx = [0.2 0.58 0.58 0.2 0.2];
 %                 yy = [S/2 S/2.1 -S/2.1 -S/2 S/2];
@@ -73,8 +74,8 @@ classdef Plotter < handle
                 %% wheels
                 xx = [-rx -rx rx  rx -rx];
                 yy = [-ry  ry ry -ry -ry];
-                hp = [hp patch( xx, yy + S/2, [0.7 0.7 0.7], 'EdgeColor', 'none')];
-                hp = [hp patch( xx, yy - S/2, [0.7 0.7 0.7], 'EdgeColor', 'none')];
+                hp = [hp patch( xx, yy + S/2, [0.2 0.2 0.2], 'EdgeColor', [0 0 0])];
+                hp = [hp patch( xx, yy - S/2, [0.2 0.2 0.2], 'EdgeColor', [0 0 0])];
                 
                 %% laser
 %                 theta=linspace(0,2*pi,10); %100 evenly spaced points between 0 and 2pi
@@ -88,7 +89,9 @@ classdef Plotter < handle
                 for hh=hp
                     set(hh, 'Parent', h);
                     set(hh, 'Tag', [tag '.chunk']);
+                    
                 end
+                
             end
             
             set(h, 'Matrix', transl([x(1:2)' 0]) * trotz (x(3)));
@@ -104,39 +107,115 @@ classdef Plotter < handle
             h = findobj(pl.ha, 'Tag', tag);
             if isempty(h)
                 h = plot(x(:,1), x(:,2), 'Color', color);
+                set(h, 'Parent', pl.ha);
                 set(h, 'Tag', tag);
             else
                 set(h, 'XData', x(:,1), 'YData', x(:,2), 'Color', color);
             end
         end
         
-        function plotLandmark(pl, lans, tag)
+        
+        function plotAnonymousLandmarks(pl, lans, tag)
+            if ~ishghandle(pl.ha)
+                pl.ha = Plotter.newAxes();
+            end
+            h = findobj(pl.ha, 'Tag', tag);
+            if ~isempty(h)
+                delete(h);
+            end
+            for lan = lans
+            % Anonymous landmark
+                    c1 = [190 30 30]./255;
+                    c2 = [250 120 25]./255;
+                    h = plot(lan.x,lan.y, 'LineStyle','none', ...
+                                          'Marker','o', ...
+                                          'MarkerSize',5, ...
+                                          'MarkerEdgeColor',c1, ...
+                                          'MarkerFaceColor',c2, ...
+                                          'HitTest', 'off');
+                    set(h, 'Tag', tag);
+                    set(h, 'Parent', pl.ha);
+                    set(h, 'UserData', lan);
+                    if ~isempty(lan.matched_landmark)
+                       Xl = [lan.x lan.matched_landmark.x];
+                       Yl = [lan.y lan.matched_landmark.y];
+                       raycolor = [rand*20 + 20, rand*20 + 180, rand*20 + 180]./255;
+                       raywidth = rand*3 + 1;
+                       h2 = line(Xl, Yl, 'Color', raycolor, 'LineWidth', raywidth);
+                       set(h2, 'Tag', tag);
+                    set(h, 'Parent', pl.ha);
+                    end
+                    
+            end
+        end
+              
+        
+        function plotKnownLandmarks(pl, lans, tag)
             if ~ishghandle(pl.ha)
                 pl.ha = Plotter.newAxes();
             end
             
-            for lan = lans
-                u1 = lan.u1 * 0.1;
-                u2 = lan.u2 * 0.1;
-                X = [lan.x + u1(1), lan.x, lan.x + u2(1)];
-                Y = [lan.y + u1(2), lan.y, lan.y + u2(2)];
-                if lan.isConvex()
-                    color = 'c';
-                else
-                    color = 'y';
-                end
-                
-                %tag = ['Landmark_', num2str(lan.id)];
-                h = findobj(pl.ha, 'Tag', tag);
+            for lan = lans              
+                % Map landmark
+                ltag = [tag '.' num2str(lan.id)];
+                h = findobj(pl.ha, 'Tag', ltag);
                 if isempty(h)
-                    h = line(X, Y, 'Color', color, 'LineWidth', 5);
+                    c1 = [30 190 180]./255;
+                    c2 = [30 220 80]./255;
+                    h = plot(lan.x,lan.y, 'LineStyle','none', ...
+                                          'Marker','o', ...
+                                          'MarkerSize',5, ...
+                                          'MarkerEdgeColor',c1, ...
+                                          'MarkerFaceColor',c2, ...
+                                          'HitTest', 'off');
                     %text(lan.x , lan.y, int2str(lan.id), 'FontSize', 20, 'Color', 'r');
-                    set(h, 'Tag', tag);
+                    set(h, 'Tag', ltag);
+                    set(h, 'Parent', pl.ha);
                     set(h, 'UserData', lan);
                 else
-                    set(h, 'XData', X, 'YData', Y, 'Color', color);
+                    set(h, 'XData', lan.x, 'YData', lan.y);
                 end
                 
+                
+                
+%                 % Point landmark
+%                 if isempty(lan.u1)
+%                     color = 'g';
+%                     h = findobj(pl.ha, 'Tag', ltag);
+%                     if isempty(h)
+%                         c1 = [0 1 0.3];
+%                         c2 = [0 0.4 1];
+%                         h = plot(lan.x,lan.y,'LineStyle','none','Marker','o','MarkerSize',5,'MarkerEdgeColor',c1,'MarkerFaceColor',c2, 'HitTest', 'off');
+%                         %text(lan.x , lan.y, int2str(lan.id), 'FontSize', 20, 'Color', 'r');
+%                         set(h, 'Tag', ltag);
+%                         set(h, 'Parent', pl.ha);
+%                         set(h, 'UserData', lan);
+%                     else
+%                         set(h, 'XData', lan.x, 'YData', lan.y, 'Color', color);
+%                     end
+%                 % Vertex landmark
+%                 else
+%                     u1 = lan.u1 * 0.1;
+%                     u2 = lan.u2 * 0.1;
+%                     X = [lan.x + u1(1), lan.x, lan.x + u2(1)];
+%                     Y = [lan.y + u1(2), lan.y, lan.y + u2(2)];
+% 
+%                     if lan.isConvex()
+%                         color = 'g';
+%                     else
+%                         color = 'g';
+%                     end
+%                     h = findobj(pl.ha, 'Tag', ltag);
+%                     if isempty(h)
+%                         h = line(X, Y, 'Color', color, 'LineWidth', 5, 'HitTest', 'off');
+%                         %text(lan.x , lan.y, int2str(lan.id), 'FontSize', 20, 'Color', 'r');
+%                         set(h, 'Tag', ltag);
+%                         set(h, 'Parent', pl.ha);
+%                         set(h, 'UserData', lan);
+%                     else
+%                         set(h, 'XData', X, 'YData', Y, 'Color', color);
+%                     end
+%                 end
             end
         end
         
@@ -167,6 +246,7 @@ classdef Plotter < handle
             if isempty(h)
                 h = patch(x, y, color, 'FaceAlpha', 0.5, 'EdgeColor', 'none');
                 set(h, 'Tag', tag);
+                set(h, 'Parent', pl.ha);
             else
                 set(h, 'XData', x, 'YData', y);
             end
@@ -194,6 +274,7 @@ classdef Plotter < handle
             if isempty(h)
                 h = patch(x, y, color, 'FaceAlpha', 0.5, 'EdgeColor', 'none');
                 set(h, 'Tag', tag);
+                set(h, 'Parent', pl.ha);
             else
                 set(h, 'XData', x, 'YData', y);
             end
@@ -206,10 +287,29 @@ classdef Plotter < handle
             
             h = findobj(pl.ha, 'Tag', tag);
             if isempty(h)
-                h = plot(X, Y, color, 'MarkerSize', 1, 'LineStyle', '.');
+                h = scatter(X, Y, 1, color);
                 set(h, 'Tag', tag);
+                set(h, 'Parent', pl.ha);
             else
-                set(h, 'XData', X, 'YData', Y);
+                set(h, 'XData', X, 'YData', Y, 'CData', color);
+            end
+        end
+        
+        %cp : color points
+        %ca : color area
+        function plotScanArea(pl, X, Y, tag, color, alph)
+            if ~ishghandle(pl.ha)
+                pl.ha = Plotter.newAxes();
+            end
+
+            h = findobj(pl.ha, 'Tag', tag);
+            if isempty(h)
+                h = patch([0 X 0], [0 Y 0], color, 'EdgeColor', 'none', 'HitTest', 'off');
+                alpha(h, alph);
+                set(h, 'Tag', tag);
+                set(h, 'Parent', pl.ha);
+            else
+                set(h,'XData',[0 X 0], 'YData',[0 Y 0]);
             end
         end
         
@@ -229,8 +329,9 @@ classdef Plotter < handle
             
             h = findobj(pl.ha, 'Tag', [tag '.line']);
             if isempty(h)
-                h = line(X, Y, 'Color', 'r', 'LineWidth', 1);
+                h = line(X, Y, 'Color', [0.8 0.1 0.3], 'LineWidth', 2);
                 set(h, 'Tag', [tag '.line']);
+                set(h, 'Parent', pl.ha);
             else
                 set(h, 'XData', X, 'YData', Y);
             end
@@ -246,13 +347,16 @@ classdef Plotter < handle
             V = Res.vertices;
             h = findobj(pl.ha, 'Tag', [tag '.vertices']);
             if isempty(h)
-                h = scatter(p(1,V), p(2,V), 50, 'ro', 'fill');
+                h = scatter(p(1,V), p(2,V), 50, 'go', 'fill');
                 set(h, 'Tag', [tag '.vertices']);
+                set(h, 'Parent', pl.ha);
             else
                 set(h, 'XData', p(1,V), 'YData', p(2,V));
             end
 
         end
+        
+        
     end
    
 end

@@ -19,7 +19,7 @@ classdef LandmarkExtractor < handle
         
         % Split and Merge
         splitDist       % max point distance to a segment without split
-
+        maxOutliers     % max number of outliers in a line
         % Landmark
         angularTolerance
         
@@ -31,19 +31,22 @@ classdef LandmarkExtractor < handle
         function ext = LandmarkExtractor()
             
             %% Default parameters
-            ext.validRange = [0.02 3.8];
-            ext.maxClusterDist = 0.10;
-            ext.splitDist = 0.05;
+            ext.validRange = [0.02 5];
+            ext.maxClusterDist = 0.25;
+            ext.splitDist = 0.1;
             ext.angularTolerance = 15.0;
+            ext.maxOutliers = 3;
         end
         
-        function [Landmarks, Ret] = extract(ext, range, p)
+        % p  : points in local frame
+        % pw : points in world frame
+        function [Landmarks, Info] = extract(ext, range, p, pw)
             
             Landmarks = [];
             %% Get points inside valid range
             %valid = find(range > opt.validRange(1) & range < opt.validRange(2));
             p = p(:, range > ext.validRange(1) & range < ext.validRange(2));
-            
+            pw = pw(:, range > ext.validRange(1) & range < ext.validRange(2));
             %% Clusterize
             ep = endpoints(p, ext.maxClusterDist, 0);
             
@@ -52,7 +55,7 @@ classdef LandmarkExtractor < handle
             VV = [];
             for k = 1: size(ep, 2)
                 pp = p(:, ep(1,k):ep(2,k));
-                [L, V]= splitAndMerge(pp, ext.splitDist);
+                [L, V]= splitAndMerge(pp, ext.splitDist, ext.maxOutliers);
                 
                 % Add index offset
                 offset = ep(1,k) - 1;
@@ -65,6 +68,7 @@ classdef LandmarkExtractor < handle
             
             %% Create Landmarks
             isLandmark = false(length(p), 1);
+            landmark_count = 0;
             for i = 1: length(LL) - 1
                 % Vertex
                 if LL(2, i) == LL(1, i+1)
@@ -89,7 +93,10 @@ classdef LandmarkExtractor < handle
                         if ori < 0
                             ori = ori + 360;
                         end
-                        lan = Landmark(b, angle, ori, u1, u2);                    
+                        
+                        lan = Landmark(pw(:,i1), b, angle, ori, u1, u2);
+                        landmark_count = landmark_count + 1;
+                        lan.id = -landmark_count;
                         isLandmark(i1) = true;
                         if isLandmark(i0)
                            lan.prev = Landmarks(end);
@@ -104,11 +111,11 @@ classdef LandmarkExtractor < handle
             
             %% Save outputs
             if nargout > 1
-                Ret.p = p;
+                Info.p = p;
                 %Ret.valid = valid;
-                Ret.clusters = ep;
-                Ret.edges = LL;
-                Ret.vertices = VV;
+                Info.clusters = ep;
+                Info.edges = LL;
+                Info.vertices = VV;
             end
             
         end

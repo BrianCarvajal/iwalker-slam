@@ -59,6 +59,21 @@ classdef LandmarkMap < handle
             %s = lan.sameness(features);
             [v, i] = min(s);
         end
+        
+        function b = containsLandmark(map, lan, max_dist)
+            if isempty(map.landmarks)
+                b = false;
+            else
+                [dist, id] = map.bestMatch(lan);
+                if dist < max_dist
+                    lan.id = id;
+                    lan.matched_landmark = map.landmarks(id);
+                    b = true;
+                else
+                    b = false;
+                end
+            end
+        end
     end
     
     

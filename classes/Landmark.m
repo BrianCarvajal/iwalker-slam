@@ -18,7 +18,8 @@
 classdef Landmark < handle
     
     properties
-        pos     % x and y position
+        pos     % x and y position in wolrd frame
+        posl    % x and y position in local frame
         ang     % In range [-180 180]. Positive angles are concave and negative convex
         ori     %
         u1      % unitary vector 1
@@ -28,6 +29,8 @@ classdef Landmark < handle
         times_updated = 0   % times seen before
         id = -1             % unique id
         hist_pos
+        matched_landmark %if the landarmk is anonymous and match some know ,
+                         % stores a reference to that landmark
     end
     
     properties (Dependent = true)
@@ -35,7 +38,7 @@ classdef Landmark < handle
     end
     
     methods
-        function obj = Landmark(pos, ang, ori, u1, u2)
+        function obj = Landmark(pos, posl, ang, ori, u1, u2)
             %Landmark object constructor
             %
             %   L = Landmark(P, A, O, U1, U2) is an object representing a
@@ -43,12 +46,14 @@ classdef Landmark < handle
             %   U1 and U2 are the unitary vectors
             
             obj.pos = pos;
+            obj.posl = posl;
             obj.ang = ang;
             obj.ori = ori;
             obj.u1 = u1;
             obj.u2 = u2;
             obj.prev = [];
             obj.next = [];
+            obj.matched_landmark = [];
         end
         
         function x = get.x(lan)
@@ -193,7 +198,7 @@ classdef Landmark < handle
             
             k1 = 1.0;
             k2 = 0.0;
-            ed = sqrt( (l1.x - l2.x)^2 + (l1.y - l2.y).^2 );
+            ed = sqrt( (l1.x - l2.x)^2 + (l1.y - l2.y)^2 );
             ad = abs(sinh(l1.ori - l2.ori));
             s = (k1 * ed + k2 * ad);
             
@@ -205,11 +210,10 @@ classdef Landmark < handle
             %s = 2*(abs(lan.x - [features.x]) + abs(lan.y - [features.y])) + abs(lan.ang - [features.ang]);
         end
         
-        function [v,i] = best_match(lan, features)
-            s = zeros(length(features), 1);
-            for k = 1: length(features)
-                
-                s(k) = lan.sameness(features(k));
+        function [v,i] = best_match(lan, landmarks)
+            s = zeros(length(landmarks), 1);
+            for k = 1: length(landmarks)  
+                s(k) = lan.sameness(landmarks(k));
             end
             %s = lan.sameness(features);
             [v, i ] = min(s);
