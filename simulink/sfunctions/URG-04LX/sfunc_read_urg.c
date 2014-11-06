@@ -22,15 +22,10 @@ int act_urg = 0;
 int res[682];
 int verbose = 0;
 bool isFIFOURGcreated;
-//struct timeval timestamp;
 
-// Parametros leidos desde simulink
-
-
-
-void openURG(unsigned char COMnumber){
-    
+void openURG(unsigned char COMnumber){   
     char portString[20];
+    if (verbose) printf("URG: call openURG()\n");
     sprintf(portString,"\\\\.\\COM%d",COMnumber);
     hCom= CreateFile(portString, GENERIC_READ | GENERIC_WRITE, 0 , NULL, OPEN_EXISTING, 0, NULL);
     
@@ -43,62 +38,98 @@ void openURG(unsigned char COMnumber){
         dcb.ByteSize = 8;
         dcb.Parity = NOPARITY;
         dcb.StopBits = ONESTOPBIT;
-        if (verbose) mexPrintf("Opening Port...");
+        if (verbose) printf("URG: Opening Port...");
         SetCommState(hCom, &dcb);
-        if (verbose) mexPrintf(" Ok!\n");
+        if (verbose) printf(" Ok!\n");
+        urg_start_single_scan();
     }
     else {
-        if (verbose) mexPrintf("Error opening Port\n");
+        if (verbose) printf("URG: Error opening Port\n");
     }
-    
+    if (verbose) printf("URG: return openURG()\n");
 }
 
-int readURG(unsigned char *buf, int size) {
-    
+int readURG(unsigned char *buf, int size) {   
     unsigned long aux=size;
-    if (verbose) mexPrintf("ReadURG\n");
+    if (verbose) printf("URG: call readURG()\n");
     if (ReadFile(hCom,
             buf,
             size,
             &aux,
             NULL) == 0)
     {
+        if (verbose) printf("URG: ReadFile() Ok\n");
         return 0;
+    } else {
+        if (verbose) printf("URG: ERROR in ReadFile()\n");
     }
     if (aux > 0)
     {
         return (int)aux;
     }
+    if (verbose) printf("URG: return readURG()\n");
     return (int)0-aux;
 }
 
-int urg_start_single_scan(void) {
+int urg_start_single_scan(void) {  
     DWORD dwBytesWritten = 0;
     int res = 0;
     char msg[256];
+    if (verbose) printf("URG: call urg_start_single_scan()\n");
     sprintf(msg,"MS0044072500001\r");
     
-    if (verbose) mexPrintf("Sending text: %s\n", msg);
+    if (verbose) printf("URG: Sending text: %s\n", msg);
     if(!WriteFile(hCom, msg, strlen(msg), &dwBytesWritten, NULL))
     {
-        if (verbose) mexPrintf( "Error writing text to %s\n", msg);
+        if (verbose) printf( "URG: Error writing text to %s\n", msg);
     }
     else
     {
-       if (verbose) mexPrintf( "%d bytes written\n", dwBytesWritten);
+       if (verbose) printf( "URG: %d bytes written\n", dwBytesWritten);
     }
-    
-    /* #ifndef MEX_PATCH
-     * res = rt_spwrite(ss_port,msg,strlen(msg));
-     * #endif*/
+    if (verbose) printf("URG: return urg_start_single_scan()\n");
     return dwBytesWritten;
 }
 
 void closeURG(){
+    if (verbose) printf("URG: call closeURG()\n");
     CloseHandle(hCom);
-    /*#ifndef MEX_PATCH
-     * rt_spclose(ss_port);
-     * #endif*/
+    if (verbose) printf("URG: return closeURG()\n");
+}
+
+short char_decode(const unsigned char data[], int data_byte) {  
+    short value = 0;
+    int i;    
+    for (i = 0; i < data_byte; ++i) {
+        value <<= 6;
+        value &= ~0x3f;
+        value |= data[i] - 0x30;
+    }    
+    return value;
+}
+
+
+void urg_decode(unsigned char *buf, int *res) {   
+    int i = 0;
+    int j = 0;
+    char data[2];   
+    // 2 LF seguidos marcan el final de los datos
+    while (!(isLF(buf[i+1]) && isLF(buf[i+2]))) {
+        //Leemos los bytes de 2 en 2. Si el segundo byte es LF es fin de
+        //linea de 64 bytes + byte de suma + byte LF
+        if (verbose) printf("[%c%c]",buf[i], buf[i+1]);
+        if (!isLF(buf[i+1])) {
+            data[0] = buf[i];
+            data[1] = buf[i+1];
+            res[j] = char_decode(data, 2);
+            j++;
+        }
+        i+=2;
+    }
+}
+
+int isLF(char c) {
+    return (c == '\r' || c == '\n');
 }
 
 /*====================*
@@ -117,7 +148,7 @@ static void mdlInitializeSizes(SimStruct *S) {
         /* Return if number of expected != number of actual parameters */
         return;
     }
-    
+  //  printf("URG: 111\n");
     ssSetNumContStates(S, 0);
     ssSetNumDiscStates(S, 0);
     
@@ -140,9 +171,8 @@ static void mdlInitializeSizes(SimStruct *S) {
     
     ssSetOptions(S, 0);
     
-    mexPrintf("Inicializando driver URG-04LX...\n");
+    printf("URG: Inicializando driver URG-04LX...\n");
 }
-
 
 /* Function: mdlInitializeSampleTimes =========================================
  * Abstract:
@@ -153,17 +183,17 @@ static void mdlInitializeSizes(SimStruct *S) {
 static void mdlInitializeSampleTimes(SimStruct *S) {
     mxArray *array_ptr;
     double sampleTime;
-    
+    printf("URG: 2222\n");
     // Leemos el sample time definido por el usuario
     array_ptr = mexGetVariable("caller", "SampleTime");
     if (array_ptr == NULL ){
-        mexPrintf("No se encontro la variable SampleTime. Se usará 0.5\n");
+        printf("URG: No se encontro la variable SampleTime. Se usará 0.5\n");
         sampleTime = 0.5;
     }
     else
     {
         sampleTime=*((double*)(mxGetData(array_ptr)));
-        mexPrintf("Usando variable SampleTime con valor = %f\n", sampleTime);
+        printf("URG: Usando variable SampleTime con valor = %f\n", sampleTime);
     }
     //sampleTime = *sampleTimeTmp;
     /* Destroy array */
@@ -173,7 +203,6 @@ static void mdlInitializeSampleTimes(SimStruct *S) {
     ssSetSampleTime(S, 0, sampleTime);
     ssSetOffsetTime(S, 0, 0.0);
 }
-
 
 #define MDL_START  /* Change to #undef to remove function */
 #if defined(MDL_START)
@@ -185,28 +214,27 @@ static void mdlInitializeSampleTimes(SimStruct *S) {
  *    to do it.
  */
 static void mdlStart(SimStruct *S) {
-    // Por alguna razon los printf no funcionan en esta función
     mxArray *array_ptr;
     double *tmp;
     char COM;
-    ssPrintf("Obteniendo variables...\n");
+    if (verbose) printf("URG: call mdlStart()\n");
     // Leemos el COM definido por el usuario
     array_ptr = mexGetVariable("caller", "COM");
     if (array_ptr == NULL ){
-        mexPrintf("No se encontro la variable COM. Se intentara usar COM1\n");
+        printf("URG: No se encontro la variable COM. Se intentara usar COM1\n");
         verbose = 0;
     }
     else
     {
         tmp=(double*)(mxGetData(array_ptr));
         COM=(unsigned char)(*tmp);
-        mexPrintf("Block 'sfunc_read_urg' has get the Laser COM number from workspace: COM%d\n",COM);
+        printf("URG: Usando COM%d\n",COM);
     }
     
     // Leemos el flag Verbose
     array_ptr = mexGetVariable("caller", "Verbose");
     if (array_ptr == NULL ){
-        mexPrintf("No se encontro la variable Verbose. Se desactiva Verbose");
+        printf("URG: No se encontro la variable Verbose. Se desactiva Verbose");
         COM=1;
     }
     else
@@ -214,9 +242,9 @@ static void mdlStart(SimStruct *S) {
         tmp=(double*)(mxGetData(array_ptr));
         verbose=(int)(*tmp);
         if (verbose) {
-            mexPrintf("Verbose activado\n");
+            printf("URG: Verbose activado\n");
         } else {
-            mexPrintf("Verbose desactivado\n");
+            printf("URG: Verbose desactivado\n");
         }
     }   
     /* Destroy array */
@@ -224,61 +252,10 @@ static void mdlStart(SimStruct *S) {
     memset(buf, 0, sizeof(buf));
     memset(res, 0, sizeof(res));    
     openURG(COM);   
-    urg_start_single_scan();
+    //urg_start_single_scan();
+    if (verbose) printf("URG: return mdlStart()\n");
 }
 #endif /*  MDL_START */
-
-
-/* Function: mdlTerminate =====================================================
- * Abstract:
- *    In this function, you should perform any actions that are necessary
- *    at the termination of a simulation.  For example, if memory was
- *    allocated in mdlStart, this is the place to free it.
- *
- */
-static void mdlTerminate(SimStruct *S) {
-    closeURG();
-}
-
-
-short char_decode(const unsigned char data[], int data_byte) {
-    
-    short value = 0;
-    int i;
-    
-    for (i = 0; i < data_byte; ++i) {
-        value <<= 6;
-        value &= ~0x3f;
-        value |= data[i] - 0x30;
-    }    
-    return value;
-}
-
-
-void urg_decode(unsigned char *buf, int *res) {
-    
-    int i = 0;
-    int j = 0;
-    char data[2];
-    
-    // 2 LF seguidos marcan el final de los datos
-    while (!(isLF(buf[i+1]) && isLF(buf[i+2]))) {
-        //Leemos los bytes de 2 en 2. Si el segundo byte es LF es fin de
-        //linea de 64 bytes + byte de suma + byte LF
-        if (verbose) mexPrintf("[%c%c]",buf[i], buf[i+1]);
-        if (!isLF(buf[i+1])) {
-            data[0] = buf[i];
-            data[1] = buf[i+1];
-            res[j] = char_decode(data, 2);
-            j++;
-        }
-        i+=2;
-    }
-}
-
-int isLF(char c) {
-    return (c == '\r' || c == '\n');
-}
 
 /* Function: mdlOutputs =======================================================
  *
@@ -305,18 +282,18 @@ static void mdlOutputs(SimStruct *S, int_T tid) {
     int i;
     int lenLine = 0;
     int startData = 0;
-    //if (verbose) mexPrintf("asignacion: %d\n",n = readURG(&car, sizeof(car)));
-    if (verbose) mexPrintf("\n\n=====================================\n");
-    if (verbose) mexPrintf("Lectura de laser: \n");
-    if (verbose) mexPrintf("Leyendo cabecera...\n");
+    //if (verbose) printf("asignacion: %d\n",n = readURG(&car, sizeof(car)));
+    if (verbose) printf("URG: \n\n=====================================\n");
+    if (verbose) printf("URG: Lectura de laser: \n");
+    if (verbose) printf("URG: Leyendo cabecera...\n");
 
     // Leemos los datos disponibles y pedimos una nueva lectura
     n = readURG(buf, sizeof(buf));
     urg_start_single_scan();
-    if (verbose) mexPrintf("%d bytes leidos\n", n);
-    for (i = 0; i < n; i++) {
-        if (verbose) mexPrintf("%c",buf[i]);
-    }
+    if (verbose) printf("URG: %d bytes leidos\n", n);
+//     for (i = 0; i < n; i++) {
+//         if (verbose) printf("%c",buf[i]);
+//     }
     
     i = 0;
     while (i < n && lenLine < 64) {
@@ -331,13 +308,13 @@ static void mdlOutputs(SimStruct *S, int_T tid) {
     }
     
     if (lenLine >= 64) {
-        if (verbose) mexPrintf("\nDatos leidos, decodificando...\n");
+        if (verbose) printf("URG: Datos leidos, decodificando...\n");
         //buf[act] = '\0';
         memset(res, 0, sizeof(res));
         urg_decode(&(buf[startData]), res);
         memset(aux, 0, sizeof(aux));
 
-        if (verbose) mexPrintf("\nConvirtiendo a Integer...\n");
+        if (verbose) printf("URG: Convirtiendo a Integer...\n");
         j=0;
         for (i=0; i<682; i++) {
             biconvert.val = res[i];
@@ -353,16 +330,26 @@ static void mdlOutputs(SimStruct *S, int_T tid) {
         aux[j++] = biconvert.bytes[3];
         
         memset(buf, 0, sizeof(buf));
-        if (verbose) mexPrintf("\nfin lectura laser\n");
+        if (verbose) printf("URG: Fin lectura laser\n");
         
         for (i=0; i<682; i++) y[i] = res[i];
-        if (verbose) mexPrintf("copia realizada en Output laser\n");
+        if (verbose) printf("URG: copia realizada en Output laser\n");
     }
     else {
-        if (verbose) mexPrintf("Datos no disponibles\n");
+        if (verbose) printf("URG: Datos no disponibles\n");
     }      
 }
 
+/* Function: mdlTerminate =====================================================
+ * Abstract:
+ *    In this function, you should perform any actions that are necessary
+ *    at the termination of a simulation.  For example, if memory was
+ *    allocated in mdlStart, this is the place to free it.
+ *
+ */
+static void mdlTerminate(SimStruct *S) {
+    closeURG();
+}
 
 
 /*=============================*

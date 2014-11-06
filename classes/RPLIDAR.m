@@ -104,6 +104,7 @@ classdef RPLIDAR < handle
             end
             lid.data_length = length(range);
             lid.range = double(range);
+            lid.ang = angle;
             lid.p = [lid.range .* cosd(angle); lid.range .* sind(angle)];
             Tw = lid.globalTransform();
             lid.pw = pTransform(lid.p, Tw);

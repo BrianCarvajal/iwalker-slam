@@ -1,35 +1,35 @@
-function varargout = iWalkerHokuyo(varargin)
-    % IWALKERHOKUYO MATLAB code for iWalkerHokuyo.fig
-    %      IWALKERHOKUYO, by itself, creates a new IWALKERHOKUYO or raises the existing
+function varargout = iWalkerSLAM(varargin)
+    % IWALKERSLAM MATLAB code for iWalkerSLAM.fig
+    %      IWALKERSLAM, by itself, creates a new IWALKERSLAM or raises the existing
     %      singleton*.
     %
-    %      H = IWALKERHOKUYO returns the handle to a new IWALKERHOKUYO or the handle to
+    %      H = IWALKERSLAM returns the handle to a new IWALKERSLAM or the handle to
     %      the existing singleton*.
     %
-    %      IWALKERHOKUYO('CALLBACK',hObject,eventData,handles,...) calls the local
-    %      function named CALLBACK in IWALKERHOKUYO.M with the given input arguments.
+    %      IWALKERSLAM('CALLBACK',hObject,eventData,handles,...) calls the local
+    %      function named CALLBACK in IWALKERSLAM.M with the given input arguments.
     %
-    %      IWALKERHOKUYO('Property','Value',...) creates a new IWALKERHOKUYO or raises the
+    %      IWALKERSLAM('Property','Value',...) creates a new IWALKERSLAM or raises the
     %      existing singleton*.  Starting from the left, property value pairs are
-    %      applied to the GUI before iWalkerHokuyo_OpeningFcn gets called.  An
+    %      applied to the GUI before iWalkerSLAM_OpeningFcn gets called.  An
     %      unrecognized property name or invalid value makes property application
-    %      stop.  All inputs are passed to iWalkerHokuyo_OpeningFcn via varargin.
+    %      stop.  All inputs are passed to iWalkerSLAM_OpeningFcn via varargin.
     %
     %      *See GUI Options on GUIDE's Tools menu.  Choose "GUI allows only one
     %      instance to run (singleton)".
     %
     % See also: GUIDE, GUIDATA, GUIHANDLES
 
-    % Edit the above text to modify the response to help iWalkerHokuyo
+    % Edit the above text to modify the response to help iWalkerSLAM
 
-    % Last Modified by GUIDE v2.5 28-Oct-2014 11:40:07
+    % Last Modified by GUIDE v2.5 31-Oct-2014 11:25:10
 
     % Begin initialization code - DO NOT EDIT
     gui_Singleton = 1;
     gui_State = struct('gui_Name',       mfilename, ...
                        'gui_Singleton',  gui_Singleton, ...
-                       'gui_OpeningFcn', @iWalkerHokuyo_OpeningFcn, ...
-                       'gui_OutputFcn',  @iWalkerHokuyo_OutputFcn, ...
+                       'gui_OpeningFcn', @iWalkerSLAM_OpeningFcn, ...
+                       'gui_OutputFcn',  @iWalkerSLAM_OutputFcn, ...
                        'gui_LayoutFcn',  [] , ...
                        'gui_Callback',   []);
     if nargin && ischar(varargin{1})
@@ -44,16 +44,17 @@ function varargout = iWalkerHokuyo(varargin)
     % End initialization code - DO NOT EDIT
 end
 
-% --- Executes just before iWalkerHokuyo is made visible.
-function iWalkerHokuyo_OpeningFcn(hObject, eventdata, handles, varargin)
+% --- Executes just before iWalkerSLAM is made visible.
+function iWalkerSLAM_OpeningFcn(hObject, eventdata, handles, varargin)
     % This function has no output args, see OutputFcn.
     % hObject    handle to figure
     % eventdata  reserved - to be defined in a future version of MATLAB
     % handles    structure with handles and user data (see GUIDATA)
-    % varargin   command line arguments to iWalkerHokuyo (see VARARGIN)
+    % varargin   command line arguments to iWalkerSLAM (see VARARGIN)
 
-    % Choose default command line output for iWalkerHokuyo
+    % Choose default command line output for iWalkerSLAM
     handles.output = hObject;
+    
     
     if ~isfield(handles, 'init')
        handles.init = true;
@@ -64,23 +65,140 @@ function iWalkerHokuyo_OpeningFcn(hObject, eventdata, handles, varargin)
     %% Load icons
     handles.playIcon = iconRead('play.png');
     handles.stopIcon = iconRead('stop.png');
-    handles.landmarkIcon = iconRead('greenMarker.png');
-    %handles.walkerIcon = iconRead('walker.png');
     
-    %% Set GUI icon
-    try
-        warning('off','MATLAB:HandleGraphics:ObsoletedProperty:JavaFrame');
-        javaFrame = get(hObject,'JavaFrame');
-        javaFrame.setFigureIcon(javax.swing.ImageIcon([cd '\slam.gif']));
-    end
-     set(gcf, 'Pointer', 'watch');
+    handles.landmarkIcon = iconRead('greenMarker.png');
+    
+    set(gcf, 'Pointer', 'watch');
     
     %% Load mouse pointers
     icon = iconRead('cross2.png');
     handles.crossPointer = ceil(icon(:,:,1));
     
-    %% Hardcode Parameters
-    handles.configFile = 'configHokuyo.yaml';
+     %% Set GUI icon
+    try
+        warning('off','MATLAB:HandleGraphics:ObsoletedProperty:JavaFrame');
+        javaFrame = get(hObject,'JavaFrame');
+        javaFrame.setFigureIcon(javax.swing.ImageIcon([cd '\slam.gif']));
+    end
+    
+
+    %% Main vertical separation: |leftPanel|mapAxes|tabPanel|
+    hbf = uiextras.HBoxFlex( 'Parent', handles.viewPanel );   
+    leftPanel = uiextras.Panel('Parent', hbf);
+    handles.mapAxes = axes('Parent', hbf, 'ActivePositionProperty', 'OuterPosition');
+    handles.tabPanel = uiextras.TabPanel('Parent', hbf);
+    
+    %% Tab panel
+    % Tab 1: iWalker settings 
+    tab1 = uiextras.VBox('Parent', handles.tabPanel);
+        %Sample times panel
+        handles.stPanel = uiextras.Panel('Parent', tab1, 'Title', 'Sample Times');
+            g = uiextras.Grid('Parent', handles.stPanel);
+                %Labels
+                vb = uiextras.VButtonBox('Parent', g);
+                    textLabel(vb, 'Odometry');
+                    textLabel(vb, 'IMU');
+                    textLabel(vb, 'Forces');
+                    textLabel(vb, 'Lidar');
+                %Inputs
+                vb = uiextras.VButtonBox('Parent', g);
+                    handles.odometrySampleTimeInput = inputText(vb, @odometrySampleTimeInput_Callback);
+                    handles.imuSampleTimeInput = inputText(vb, @imuSampleTimeInput_Callback);
+                    handles.forcesSampleTimeInput = inputText(vb, @forcesSampleTimeInput_Callback);
+                    handles.laserSampleTimeInput = inputText(vb, @laserSampleTimeInput_Callback);           
+            set(g, 'ColumnSizes', [-1 -1]);
+            
+        %Lidar setup panel
+        handles.lidarPanel = uiextras.Panel('Parent', tab1, 'Title', 'Lidar');
+            vb = uiextras.VButtonBox('Parent', handles.lidarPanel);
+                handles.loadPortsButton = pushButton(vb, 'Load Ports', @loadPortsButton_Callback);
+                handles.laserCOMInput = popupMenu(vb, '-', @laserCOMInput_Callback);
+ 
+        %Reactive Control panel
+        handles.rcPanel = uiextras.Panel('Parent', tab1, 'Title', 'Reactive Control');
+            g = uiextras.Grid('Parent',  handles.rcPanel);
+                %Lambdas
+                hb = uiextras.HButtonBox('Parent', g);
+                    textLabel(hb, 'Lambdas');
+                    handles.leftLambdaInput = inputText(hb, @leftLambdaInput_Callback);
+                    handles.rightLambdaInput = inputText(hb, @rightLambdaInput_Callback);
+                %Nus
+                hb = uiextras.HButtonBox('Parent', g);
+                    textLabel(hb, 'Nus');
+                    handles.leftNuInput = inputText(hb, @leftNuInput_Callback);
+                    handles.rightNuInput = inputText(hb, @rightNuInput_Callback);          
+            set(g, 'RowSizes', [-1 -1]);
+            
+        %Map settings panel
+        handles.msPanel = uiextras.Panel('Parent', tab1, 'Title', 'Map');
+            g = uiextras.Grid('Parent', handles.msPanel);
+                %X Limits
+                hb = uiextras.HButtonBox('Parent', g);
+                    textLabel(hb, 'X Lim');
+                    handles.xLimMinInput = inputText(hb, @xLimMinInput_Callback);
+                    handles.xLimMaxInput = inputText(hb, @xLimMaxInput_Callback);
+                %Y Limits
+                hb = uiextras.HButtonBox('Parent', g);
+                    textLabel(hb, 'Y Lim');
+                    handles.yLimMinInput = inputText(hb, @yLimMinInput_Callback);
+                    handles.yLimMaxInput = inputText(hb, @yLimMaxInput_Callback);
+                    
+                % Resolution
+                hb = uiextras.HButtonBox('Parent', g);
+                    textLabel(hb, 'Resolution');
+                    uiextras.Empty('Parent', hb);
+                    handles.resolutionInput = inputText(hb, @resolutionInput_Callback);
+                
+                % Type of map (8bits or double)
+                handles.bitModeInput = checkbox(g, '8 Bits Mode', @bitModeInput_Callback);
+                
+                % Apply button
+                handles.applyMapButton = pushButton(g, 'Apply', @applyMapButton_Callback);
+                
+            set(g, 'RowSizes', [-1 -1 -1 -1 -1]); 
+    
+    % Tab 2: SLAM settings
+    uiextras.VBoxFlex('Parent', handles.tabPanel);
+    
+    % Tab 2: Plots settings
+    h = uiextras.VBoxFlex('Parent', handles.tabPanel);
+        hb = uiextras.HButtonBox('Parent', h);
+    % Tab names 
+    handles.tabPanel.TabNames = {'iWalker', 'SLAM', 'Plots'};
+    handles.tabPanel.SelectedChild = 1;
+    
+    %% Left panel: /LaserAxes/InfoBox/
+    vbf = uiextras.VBoxFlex( 'Parent', leftPanel );  
+    handles.lidarAxes = axes('Parent', vbf, 'ActivePositionProperty', 'Position');
+    handles.infoBox = uiextras.BoxPanel('Parent', vbf, 'Title', 'Info' );
+    
+    %%Info Box
+    textGrid = uiextras.Grid( 'Parent', handles.infoBox, 'Spacing', 5 );   
+    % First column: names
+    uicontrol('Parent', textGrid,'Style', 'text','String', 'EKF [x, y, th]'); 
+    uicontrol('Parent', textGrid,'Style', 'text','String', 'EKF [Pxx, Pyy, Pxy]');
+    uicontrol('Parent', textGrid,'Style', 'text','String', 'Lidar freq');
+    uicontrol('Parent', textGrid,'Style', 'text','String', 'Lidar samples ');    
+    % Second column: values. We save the handles for update
+    handles.info.ekf_x = uicontrol('Parent', textGrid,'Style', 'text','String', '0 0 0');
+    handles.info.ekf_P = uicontrol('Parent', textGrid,'Style', 'text','String', '0 0 0');
+    handles.info.lidar_freq = uicontrol('Parent', textGrid,'Style', 'text','String', '0');
+    handles.info.lidar_samples = uicontrol('Parent', textGrid,'Style', 'text','String', '0');
+    
+    % Set the sizes of the rows and columns of infoBox
+    rows = length(get(textGrid, 'Children'))/2;
+    set(textGrid, 'ColumnSizes', [-1 -1], 'RowSizes', ones(1,rows)*(-1));
+    
+    %Set the width of the left column (lidar plot and info box) and map
+    set( hbf, 'Sizes', [-1 -1.5 -0.5], 'Spacing', 6 );
+    
+    %Set the height of the lidar plot and the info box
+    set( vbf, 'Sizes', [-5 -1], 'Spacing', 6 );
+    
+    guidata(hObject, handles);
+    
+        %% Hardcode Parameters
+    handles.configFile = 'config.yaml';
     handles.lidar_location = [0.35, 0, 0];
     handles.isFocusiWalker = 0;
     handles.stopTime = Inf; 
@@ -91,10 +209,10 @@ function iWalkerHokuyo_OpeningFcn(hObject, eventdata, handles, varargin)
     handles.isGridMapUpdated = true;  
     handles.landmarks = [];
     handles.splitAndMergeInfo = [];   
-    handles.modelName = 'iWalkerHokuyoModel';
+    handles.modelName = 'iWalkerRoboPeakModel';
     handles.landmarkMode = false;
     handles.infoTextMode = false;
-    
+    handles.angleICP = 0;
     %% User Inputs Parameters
     config = loadConfiguration(handles.configFile);
     handles.portNumber = config.portNumber;
@@ -126,51 +244,33 @@ function iWalkerHokuyo_OpeningFcn(hObject, eventdata, handles, varargin)
     set(handles.resolutionInput, 'String', num2str(handles.gm_res));
     set(handles.bitModeInput, 'Value', handles.gm_8bitMode);
     
-   
-    guidata(hObject, handles);
 
-    handles = initObjects(hObject);
-    
-    
-    handles.state = 'NotReady';
+
+    handles = initObjects(handles);
     guidata(hObject, handles);
+    handles.state = 'NotReady';
     setState(hObject, handles.state);
 
-    %% Main vertical separation
-    hbf = uiextras.HBoxFlex( 'Parent', handles.viewPanel );
-    leftPanel = uiextras.Panel('Parent', hbf);
-    vbf = uiextras.VBoxFlex( 'Parent', leftPanel );
-    handles.mapAxes = axes('Parent', hbf, 'ActivePositionProperty', 'OuterPosition');
-    handles.lidarAxes = axes('Parent', vbf, 'ActivePositionProperty', 'Position');
-    infoBox = uiextras.BoxPanel('Parent', vbf, 'Title', 'Info' );
-    textGrid = uiextras.Grid( 'Parent', infoBox, 'Spacing', 5 );
     
-    % First column: names
-    uicontrol('Parent', textGrid,'Style', 'text','String', 'EKF [x, y, th]'); 
-    uicontrol('Parent', textGrid,'Style', 'text','String', 'EKF [Pxx, Pyy, Pxy]');
-    %uicontrol('Parent', textGrid,'Style', 'text','String', 'Lidar freq');
-    %uicontrol('Parent', textGrid,'Style', 'text','String', 'Lidar samples ');
-    % Second columns: values. We save the handlers
-    handles.info.ekf_x = uicontrol('Parent', textGrid,'Style', 'text','String', '0 0 0');
-    handles.info.ekf_P = uicontrol('Parent', textGrid,'Style', 'text','String', '0 0 0');
-    %handles.info.lidar_freq = uicontrol('Parent', textGrid,'Style', 'text','String', '0');
-    %handles.info.lidar_samples = uicontrol('Parent', textGrid,'Style', 'text','String', '0');
-    set(textGrid, 'ColumnSizes', [-1 -1], 'RowSizes', [-1 -1]);
-    set( hbf, 'Sizes', [-1 -1.5], 'Spacing', 6 );
-    set( vbf, 'Sizes', [-5 -1], 'Spacing', 6 );
-    
-   
+    %%
     handles = initPlots(handles);
     axes(handles.lidarAxes);
     polar(handles.lidarAxes, 0, 5); % set max radial ticks
     set(handles.lidarAxes, 'XLim', [-7 7], 'YLim', [-7 7]);
     delete(findall(handles.lidarAxes,'type','text'));
-    whitebg([1 1 1]);
+    ph=findall(handles.lidarAxes,'type','patch');% Change color of polar plot
+    set(ph,'facecolor',[0,0,0],'edgecolor',[.8 .8 .8],'linewidth',4);
+    alpha(ph, 0.1);
+    ph=findall(handles.lidarAxes,'type','line');% Change color of polar plot
+    
+    set(ph,'color',[.5 .5 .5],'linewidth',1);
+    
     handles.plLid = Plotter(handles.lidarAxes);
     view(handles.lidarAxes,-90,90);
     zoom(handles.lidarAxes, 2);
     hold on;
     axis equal;
+
 %    % whitebg([0 0 0]);
 %     
 %     %% Init Global Map View
@@ -216,14 +316,13 @@ function iWalkerHokuyo_OpeningFcn(hObject, eventdata, handles, varargin)
     guidata(hObject, handles);
     %loadPorts(hObject);
     updatePlots(hObject, handles);
-
     setState(hObject, 'Ready');
     set(gcf, 'Pointer', 'arrow');  
 end
 
 
 % --- Outputs from this function are returned to the command line.
-function varargout = iWalkerHokuyo_OutputFcn(hObject, eventdata, handles) 
+function varargout = iWalkerSLAM_OutputFcn(hObject, eventdata, handles) 
     % varargout  cell array for returning output args (see VARARGOUT);
     % hObject    handle to figure
     % eventdata  reserved - to be defined in a future version of MATLAB
@@ -262,6 +361,42 @@ function mainWindow_CloseRequestFcn(hObject, eventdata, handles)
         errordlg('Problem savig configuration', 'Error');
     end
     delete(hObject);
+end
+
+function h = textLabel(parent, text)
+    h = uicontrol('Parent', parent, ...
+                  'Style', 'text', ...
+                  'String', text);
+end
+
+function h = inputText(parent, callback)
+    h = uicontrol('Parent', parent, ...
+                  'Style', 'edit', ...
+                  'String', '-', ...
+                  'BackgroundColor','white', ...
+                  'Callback', callback);
+end
+
+function h = pushButton(parent, text, callback)
+    h = uicontrol('Parent', parent, ...
+                  'Style', 'pushbutton', ...
+                  'String', text, ...
+                  'callback', callback);
+end
+
+function h = popupMenu(parent, text, callback)
+    h = uicontrol('Parent', parent, ...
+                  'Style', 'popupmenu', ...
+                  'String', text, ...
+                  'BackgroundColor','white', ...
+                  'callback', callback);
+end
+
+function h = checkbox(parent, text, callback)
+    h = uicontrol('Parent', parent, ...
+                  'Style', 'checkbox', ...
+                  'String', text, ...
+                  'callback', callback);
 end
 
 function config = defaultConfiguration()
@@ -369,14 +504,14 @@ function handles = initPlots(handles)
     %handles.plLid = Plotter(handles.lidarAxes);    
     %hold on;
     %axis equal;
-    drawnow;
+    %drawnow;
 end
 
 function timerCallback(t, ~)
     hObject = get(t,'UserData');
     handles = guidata(hObject);
     updatePlots(hObject, handles);
-    updateInfo(handles);
+    updateInfoBox(handles);
 end
 
 function updatePlots(hObject, handles)
@@ -389,66 +524,70 @@ function updatePlots(hObject, handles)
     splitAndMergeInfo = handles.splitAndMergeInfo;
 
     %% Map
-%     if handles.isGridMapUpdated
-%         set(handles.imgmap, 'CData', gm.image);
-%         plMap.plotPoints(lid.pw(1,:), lid.pw(2,:), 'scan', [1 0 0]);
-%         handles.isGridMapUpdated = false; 
-%     end
-
-    plMap.plotRobot(rob.x, 'iWalker', [1 0 0]);
-    if ~isempty(rob.x_hist)
-        lenTrace = min(size(rob.x_hist,1), 500);
-        xh = rob.x_hist(end-lenTrace+1:end, 1:2); 
-        xh = xh(1:end, :);
-        plMap.plotTrace(xh, 'trace.iWalker', [0.8 0.3 0]); 
+    if handles.isGridMapUpdated
+        set(handles.imgmap, 'CData', gm.image);
+        %plMap.plotPoints(lid.pw(1,:), lid.pw(2,:), 'scan', [1 0 0]);
+        handles.isGridMapUpdated = false; 
     end
-%     plMap.plotScanArea(lid.pw(1,:), lid.pw(2,:), 'scan', [1 0.2 0.4], 0.5);
-%     plMap.plotRobot(handles.ekf.x_est(1:3), 'ekf', [30 145 200]./255);
-%     plMap.plotErrorXY(handles.ekf.P_est(1:2,1:2), handles.ekf.x_est(1:3), 'errorXY', 'c');
-%     plMap.plotErrorAngle(handles.ekf.P_est(3,3), handles.ekf.x_est(1:3), 'errorAngle', 'y');
-    
-%     mlands = handles.map.landmarks;
-%     if ~isempty(mlands)
-%        plMap.plotKnownLandmarks(mlands, 'MapLandmarks');
+    %plMap.plotRobot(rob.x, 'iWalker', [1 0 0]);
+%     if ~isempty(rob.x_hist)
+%         lenTrace = min(size(rob.x_hist,1), 500);
+%         xh = rob.x_hist(end-lenTrace+1:end, 1:2); 
+%         xh = xh(1:end, :);
+%         plMap.plotTrace(xh, 'trace.iWalker', [0.8 0.3 0]); 
 %     end
+    
+    plMap.plotRobot(handles.ekf.x_est(1:3), 'ekf', [30 145 200]./255);
+    plMap.plotErrorXY(handles.ekf.P_est(1:2,1:2), handles.ekf.x_est(1:3), 'errorXY', 'c');
+    plMap.plotErrorAngle(handles.ekf.P_est(3,3), handles.ekf.x_est(1:3), 'errorAngle', 'y');
+    
+    mlands = handles.map.landmarks;
+    if ~isempty(mlands)
+       plMap.plotKnownLandmarks(mlands, 'MapLandmarks');
+    end
     
     %if ~isempty(handles.landmarks)
-    %    plMap.plotAnonymousLandmarks(landmarks, 'ExtractedLandmarks');
+        plMap.plotAnonymousLandmarks(landmarks, 'ExtractedLandmarks');
     %end
+    plMap.plotScanArea(lid.pw(1,:), lid.pw(2,:), 'scan', [0 0.2 0.8], 0.5);
+    %plMap.plotPoints(lid.pw(1,:), lid.pw(2,:), 'scanPoints', [1 0 0], 2);
     
-    
+    if ~isempty(splitAndMergeInfo)
+        plMap.plotLineSegments(splitAndMergeInfo.segments, 'segments');
+    end
     %% Polar plot
-    %plLid.plotRobot([-0.35 0 0]', 'robL', [145 200 30]./255);
+    plLid.plotRobot([-0.35 0 0]', 'robL', [145 200 30]./255);
     
-%     if ~isempty(splitAndMergeInfo)
-%         plLid.plotSplitAndMerge(splitAndMergeInfo, 's&m');
-%     end 
-    %plLid.plotPoints(lid.p(1,:), lid.p(2,:), 'scan', [0 1 0.3]);
-    %plLid.plotScanArea(lid.p(1,:), lid.p(2,:), 'scan', [0 0.2 0.8], 0.4);
+    if ~isempty(splitAndMergeInfo)
+        plLid.plotSplitAndMerge(splitAndMergeInfo, 's&m');
+    end
+    plLid.plotAnonymousLandmarks(landmarks, 'Landmarks', true);
+    plLid.plotPoints(lid.p(1,:), lid.p(2,:), 'scanPoints', [1 0 0], 3);
+    plLid.plotScanArea(lid.p(1,:), lid.p(2,:), 'scanArea', [0 0.2 0.8], 0.4);
 %     if ~isempty(handles.landmarks)
 %         plLid.plotAnonymousLandmarks(landmarks, 'landmarks');
 %     end
 
     drawnow;
-    %guidata(hObject, handles);
+    guidata(hObject, handles);
 end
 
-function updateInfo(handles)
+
+function updateInfoBox(handles)
     ekf_P = [handles.ekf.P_est(1,1) ...
              handles.ekf.P_est(2,2)  ...
              handles.ekf.P_est(1,2)];
             
     set(handles.info.ekf_x, 'string', num2str(handles.ekf.x_est(1:3)','[%.2f]'));
     set(handles.info.ekf_P, 'string', num2str(ekf_P,'[%.2f]'));
-    %set(handles.info.lidar_freq, 'string', num2str(handles.lidarFreq, '%.1f'));
-    %set(handles.info.lidar_samples, 'string', num2str(handles.lidarLength, '%.2f'));
+    set(handles.info.lidar_freq, 'string', num2str(handles.lidarFreq, '%.1f'));
+    set(handles.info.lidar_samples, 'string', num2str(handles.lidarLength, '%.2f'));
 end
 
 
-function handles = initObjects(hObject)
-    handles = guidata(hObject);
+function handles = initObjects(handles)
     % Lidar
-    handles.lid = LIDAR(); 
+    handles.lid = RPLIDAR(); 
     
     % Landmark Map
     handles.map = LandmarkMap('manual mapping');
@@ -457,7 +596,7 @@ function handles = initObjects(hObject)
     handles.ext = LandmarkExtractor();
     handles.ext.validRange = [0.10 7];
     handles.ext.maxClusterDist = 0.15;
-    handles.ext.splitDist = 0.1;
+    handles.ext.splitDist = 0.10;
     handles.ext.angularTolerance = 15.0;
     handles.ext.maxOutliers = 3;
         
@@ -480,7 +619,6 @@ function handles = initObjects(hObject)
     else
         handles.gm = GridMap(handles.gm_res, handles.gm_xlim, handles.gm_ylim);
     end
-    guidata(hObject, handles);
 end
 
 function initModel(handles)
@@ -504,13 +642,14 @@ end
 function setupModel(handles)
     disp('Configurig model...');
     modelName = handles.modelName;
-%   Setup URG-04LX log block
+    
+    %Setup RPLidar block
     stl = handles.laserSampleTime;
-    set_param([modelName '/URG-04LX'], ...
+    set_param([modelName '/RPLidar'], ...
                 'SampleTime', num2str(stl),...
                 'COM', handles.portNumber, ...
                 'UserData', gcbo);
-
+            
     % Setup iWheels block
     stw = handles.odometrySampleTime;
     set_param([modelName '/iWheels'], ...
@@ -520,41 +659,9 @@ function setupModel(handles)
     % Setup iWheels block
     set_param([modelName '/High Frequency Odometry'], ...
                 'UserData', gcbo);
-            
-    % Setup IMU block
-    sti = handles.imuSampleTime;
-    set_param([modelName '/IMU'], ...
-                'SampleTime', num2str(sti),...
-                'UserData', gcbo);   
-            
-     % Setup FORCES block
-    stf = handles.forcesSampleTime;
-    set_param([modelName '/FORCES'], ...
-                'SampleTime', num2str(stf),...
-                'UserData', gcbo);       
-            
-    % Setup leftLambda block
-    set_param([modelName '/leftLambda'], ...
-                'Value', num2str(handles.leftLambda), ...
-                'UserData', gcbo);
-            
-    % Setup rightLambda block
-    set_param([modelName '/rightLambda'], ...
-                'Value', num2str(handles.rightLambda), ...
-                'UserData', gcbo);
-            
-    % Setup leftNu block
-    set_param([modelName '/leftNu'], ...
-                'Value', num2str(handles.leftNu), ...
-                'UserData', gcbo);
-            
-     % Setup rightNu block
-    set_param([modelName '/rightNu'], ...
-                'Value', num2str(handles.rightNu), ...
-                'UserData', gcbo);
-            
+    
     % Setup Sample Tyme Sync block
-    sts = min([stl,stw,sti,stf]);
+    sts = min([stl stw]);
     set_param([modelName '/Sample Time Sync'], ...
                 'SampleTime', num2str(sts), ...
                 'UserData', gcbo);      
@@ -568,34 +675,49 @@ end
 function eh = localAddEventListener(modelName)
     eh = [];
     eh = [eh add_exec_event_listener([modelName '/Sample Time Sync'], ...
-                                     'PostOutputs', @currentTimeEventListener)];
+                                     'PostOutputs', @sampleTimeSyncEventListener)];
                         
-    eh = [eh add_exec_event_listener([modelName '/URG-04LX'], ...
+    eh = [eh add_exec_event_listener([modelName '/RPLidar'], ...
                                      'PostOutputs', @laserEventListener)];
-    
-%     eh = [eh add_exec_event_listener('iWalkerModel/iWheels', ...
+                                 
+%     eh = [eh add_exec_event_listener([modelName '/iWheels'], ...
 %                                      'PostOutputs', @iWheelsEventListener)];
                                  
     eh = [eh add_exec_event_listener([modelName '/High Frequency Odometry'], ...
                                      'PostOutputs', @OdometryListener)];
-                                 
-    eh = [eh add_exec_event_listener([modelName '/IMU'], ...
-                                     'PostOutputs', @imuEventListener)];
-                                 
-    eh = [eh add_exec_event_listener([modelName '/FORCES'], ...
-                                     'PostOutputs', @forcesEventListener)];
 end
 
-% The function to be called when event is registered.
-function currentTimeEventListener(rtb, eventdata)
-    handles = guidata(get_param(rtb.BlockHandle, 'UserData'));
-    t = rtb.CurrentTime;
-    s = num2str(t, '%.1f');
-    set(handles.currentTimeText, 'String', s);    
-    if t > handles.stopTime
-       setState(hObject, 'Stop'); 
-    end   
-end
+% % The function to be called when event is registered.
+% function currentTimeEventListener(rtb, eventdata)
+%     handles = guidata(get_param(rtb.BlockHandle, 'UserData'));
+%     t = rtb.CurrentTime;
+% %     a = fix(t);
+% %     b = fix((t - a)*10);
+% %     s = [num2str(a) '.' num2str(b)];
+%     s = num2str(t, '%.1f');
+%     set(handles.currentTimeText, 'String', s);
+%     
+%     if t > handles.stopTime
+%        %setState(hObject, 'Stop'); 
+%     end   
+% end
+
+% %p1: points of scan 1
+% %s1: angles of scan 1
+% %p2: points of scan 2
+% %s2: angles of scan 2
+% function x = estimateDispplacementScans(p1, a1, p2, a2)
+%     s = min(size(p1,2), size(p2,2));
+%     corr = cell(1,s);
+%     for i = 1:s
+%        corr{i}.p = p1(:,i);
+%        corr{i}.q = p2(:,i);
+%        a = degtorad((a1(i)+a2(i))/2);
+%        corr{i}.C = [cos(a); sin(a)]*[cos(a); sin(a)]';
+%     end
+%     res = gpc(corr);
+%     x = res.x;
+% end
 
 % The function to be called when event is registered.
 function laserEventListener(rtb, eventdata)
@@ -604,30 +726,59 @@ function laserEventListener(rtb, eventdata)
     lid = handles.lid;
     ext = handles.ext;
     gm = handles.gm;
-    map = handles.map;    
-    lid.setRangeData(double(rtb.OutputPort(1).Data)'/1000);
-%     [landmarks, info] = ext.extract(lid.range, lid.p, lid.pw);
-%     handles.landmarks = landmarks;
-%     handles.splitAndMergeInfo = info;
-%     for lan = landmarks
-%        if map.containsLandmark(lan, 0.30)
-%           handles.ekf.innovation(lan);
-%        end
+    map = handles.map;
+    range = rtb.OutputPort(1).Data;
+    %Averiguar por que es necesaria la resta. Sin ella, se obtienen los
+    %puntos reflejados en el eje X
+    angle = rtb.OutputPort(2).Data; 
+    length = rtb.OutputPort(3).Data;
+    handles.lidarLength = length;
+    handles.lidarFreq = rtb.OutputPort(4).Data;    
+%     lenQ = size(lid.p, 2);
+%     q = lid.p; % previous scan
+%     aq = lid.ang;
+    lid.setScan(range(1:length)'/1000, angle(1:length)');
+%     lenP = size(lid.p, 2);
+%     p = lid.p; % current scan
+%     ap = lid.ang;
+%     if lenQ > 1 && lenP > 1
+%         estimateDispplacementScans(q, aq, p, ap)
+% %         [TR, TT] = icp(q,p)
+% %         angle = atan2(TR(2,1), TR(1,1))*pi/180;
+% %         handles.angleICP = handles.angleICP  + angle * 0.3;
+% %         fprintf('incr: %.5f, angle: %.3f\n', angle, handles.angleICP);
+%         %disp(num2str(angle, '%.5f'));
 %     end
-%     handles.rob.x = handles.ekf.x_est(1:3);
-%     rlim = [0.1 3.8];
-%     gm.update(lid.x, lid.pw, lid.range, rlim);
-%     handles.isGridMapUpdated = true;
+    %T = lid.globalTransform;
+    %p = pTransform(lid.p, T);
+    [landmarks, info] = ext.extract(lid.range, lid.p, lid.pw);
+    handles.landmarks = landmarks;
+    handles.splitAndMergeInfo = info;
+    for lan = landmarks
+       if map.containsLandmark(lan, 0.30)
+          handles.ekf.innovation(lan);
+       end
+    end
+    handles.rob.x = handles.ekf.x_est(1:3);
+    %handles.laserCount = mod(handles.laserCount + 1, 1);
+   % if handles.laserCount == 0
+
+        %xs = pTransform([0;0], T);
+    %xs = lid.x;
+    rlim = [0.02 5];
+    gm.update(lid.x, lid.pw, lid.range, rlim);
+    handles.isGridMapUpdated = true;
+    %end
     guidata(hObject, handles);
 end
 
 % The function to be called when event is registered.
-% function iWheelsEventListener(rtb, eventdata)
-%     handles = guidata(get_param(rtb.BlockHandle, 'UserData'));
-%     %disp(rtb.OutputPort(1).Data);
-%     rph = [rtb.OutputPort(1).Data rtb.OutputPort(2).Data];
-%     odo = handles.rob.updateDifferential(rph);
-% end
+function iWheelsEventListener(rtb, eventdata)
+    handles = guidata(get_param(rtb.BlockHandle, 'UserData'));
+    %disp(rtb.OutputPort(1).Data);
+    rph = [rtb.OutputPort(1).Data rtb.OutputPort(2).Data];
+    odo = handles.rob.updateDifferential(rph);
+end
 
 function OdometryListener(rtb, eventdata)
     handles = guidata(get_param(rtb.BlockHandle, 'UserData'));
@@ -652,12 +803,14 @@ function forcesEventListener(rtb, eventdata)
     
 end
 
+
+
+
 function setState(hObject, state)  
     handles = guidata(hObject);
     modelName = handles.modelName;
     state = upper(state);
     handles.state = state;
-    guidata(hObject, handles);
     switch state
         case 'NOTREADY'
             set(handles.stateText, 'string', 'Not Ready');
@@ -670,8 +823,10 @@ function setState(hObject, state)
             set(handles.runStopButton, 'enable', 'on');
             set(handles.runStopButton, 'CData', handles.playIcon);
             set(handles.simulinkButton, 'enable', 'on');
+            set(handles.tabPanel, 'Visible', 'on');
             guidata(hObject, handles);
         case 'RUN'
+            set(handles.tabPanel, 'Visible', 'off');
             prevPointer = get(gcf, 'Pointer');
             set(gcf, 'Pointer', 'watch');
             set(handles.stateText, 'string', 'Starting');
@@ -681,7 +836,7 @@ function setState(hObject, state)
             strid = nextExperimentID();
             set(handles.experimentID, 'String', strid);
             setupModel(handles)
-            handles = initObjects(hObject);
+            handles = initObjects(handles);
             handles = initPlots(handles);
             guidata(hObject, handles);
             set_param( modelName, 'SimulationCommand', 'start');
@@ -697,7 +852,15 @@ function setState(hObject, state)
             set(handles.runStopButton, 'enable', 'off');
             stop(handles.plotTimer);
             set_param( modelName, 'SimulationCommand', 'stop');
-            saveLog(handles);
+            %dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
+            %id = get(handles.experimentID, 'String');
+            %filename = [id '_' dstr];
+            %drpm = evalin('base','drpm');
+            %pose = evalin('base','pose');
+            %accelgyro = evalin('base','accelgyro');
+            %forces = evalin('base','forces');
+            %range = evalin('base', 'range');
+            %save(filename, 'drpm', 'pose', 'accelgyro', 'forces', 'range');
             guidata(hObject, handles);
             setState(hObject, 'READY');
         otherwise
@@ -707,48 +870,24 @@ function setState(hObject, state)
     end
 end
 
-function saveLog(handles)
-    try
-        dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
-        id = get(handles.experimentID, 'String');
-        filename = [id '_' dstr];
-        drpm = evalin('base','drpm');
-        pose = evalin('base','pose');
-        imu = evalin('base','imu');
-        forces = evalin('base','forces');
-        range = evalin('base', 'range');
-        reactive = [handles.leftLambda ...
-                    handles.rightLambda ...
-                    handles.leftNu ...
-                    handles.rightNu];
-        save(filename, 'drpm', 'pose', 'imu', 'forces', 'range', 'reactive');
-    catch
-        errordlg('Problem saving the log', 'Error');
-    end
+function str = getStringID(handles)
+    dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
+    id = get(handles.experimentID, 'String');
+    str = [id '_' dstr];
 end
 
 function strid = nextExperimentID()
-    if exist('lastID.mat', 'file') ~= 2
-        mfile = matfile('lastID.mat', 'Writable', true);
+    try 
+        x = load('lastID', 'id');
+        id = x.id;
+    catch
         id = 1;
-    else
-        mfile = matfile('lastID.mat', 'Writable', true);
-        id = mfile.id + 1;
     end
+    
     strid = num2str(id , '%05d');
-    mfile.id = id;   
-%     try 
-%         x = load('lastID', 'id');
-%         id = x.id;
-%     catch
-%         id = 1;
-%     end
-%     
-%     strid = num2str(id , '%05d');
-%     id = id + 1;
-%     save('lastID', 'id');
+    id = id + 1;
+    save('lastID', 'id');
 end
-
 
 
 
@@ -781,6 +920,7 @@ function openLogButton_ClickedCallback(hObject, eventdata, handles)
 % hObject    handle to openLogButton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+    handles = guidata(hObject);
     path =  uigetfile();
     if path ~= 0
         try
@@ -852,6 +992,7 @@ function odometrySampleTimeInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of odometrySampleTimeInput as text
 %        str2double(get(hObject,'String')) returns contents of odometrySampleTimeInput as a double
+    handles = guidata(hObject);
     st = str2double(get(hObject,'String'));
     if isnan(st)
         set(hObject, 'String', num2str(handles.odometrySampleTime));
@@ -883,6 +1024,7 @@ function imuSampleTimeInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of imuSampleTimeInput as text
 %        str2double(get(hObject,'String')) returns contents of imuSampleTimeInput as a double
+    handles = guidata(hObject);
     st = str2double(get(hObject,'String'));
     if isnan(st)
         set(hObject, 'String', num2str(handles.imuSampleTime));
@@ -914,6 +1056,7 @@ function forcesSampleTimeInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of forcesSampleTimeInput as text
 %        str2double(get(hObject,'String')) returns contents of forcesSampleTimeInput as a double
+    handles = guidata(hObject);
     st = str2double(get(hObject,'String'));
     if isnan(st)
         set(hObject, 'String', num2str(handles.forcesSampleTime));
@@ -945,6 +1088,7 @@ function laserSampleTimeInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of laserSampleTimeInput as text
 %        str2double(get(hObject,'String')) returns contents of laserSampleTimeInput as a double
+    handles = guidata(hObject);
     st = str2double(get(hObject,'String'));
     if isnan(st)
         set(hObject, 'String', num2str(handles.laserSampleTime));
@@ -976,6 +1120,7 @@ function leftNuInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of leftNuInput as text
 %        str2double(get(hObject,'String')) returns contents of leftNuInput as a double
+    handles = guidata(hObject);
     value = floor(str2double(get(hObject,'String')));
     if isnan(value) || value < 0 || value > 100
         set(hObject, 'String', num2str(handles.leftNu));
@@ -1007,6 +1152,7 @@ function rightNuInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of rightNuInput as text
 %        str2double(get(hObject,'String')) returns contents of rightNuInput as a double
+    handles = guidata(hObject);
     value = floor(str2double(get(hObject,'String')));
     if isnan(value) || value < 0 || value > 100
         set(hObject, 'String', num2str(handles.rightNu));
@@ -1038,6 +1184,7 @@ function leftLambdaInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of leftLambdaInput as text
 %        str2double(get(hObject,'String')) returns contents of leftLambdaInput as a double
+    handles = guidata(hObject);
     value = floor(str2double(get(hObject,'String')));
     if isnan(value) || value < 0 || value > 100
         set(hObject, 'String', num2str(handles.leftLambda));
@@ -1068,6 +1215,7 @@ function rightLambdaInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of rightLambdaInput as text
 %        str2double(get(hObject,'String')) returns contents of rightLambdaInput as a double
+    handles = guidata(hObject);
     value = floor(str2double(get(hObject,'String')));
     if isnan(value) || value < 0 || value > 100
         set(hObject, 'String', num2str(handles.rightLambda));
@@ -1114,6 +1262,7 @@ function laserCOMInput_Callback(hObject, eventdata, handles)
 
 % Hints: contents = cellstr(get(hObject,'String')) returns laserCOMInput contents as cell array
 %        contents{get(hObject,'Value')} returns selected item from laserCOMInput
+    handles = guidata(hObject);
     contents = cellstr(get(hObject,'String'));
     port = contents{get(hObject,'Value')};
     if ~isempty(strfind(port, 'COM'))
@@ -1169,26 +1318,12 @@ function experimentID_CreateFcn(hObject, eventdata, handles)
     end
 end
 
-function txt = customDataCursorUpdate(~,hObject)
-    pos = get(hObject, 'Position');
-    target = get(hObject, 'Target');
-    tag = get(target, 'Tag');
-    txt = { ...
-        ['Tag: ', tag], ...
-        ['x: ', num2str(pos(1))],...
-        ['y: ', num2str(pos(2))]};
-    data = get(target, 'UserData');
-    if ~isempty(data)
-       disp(data); 
-    end
-end
-
-
 % --- Executes on button press in addLanmdarkButton.
 function addLanmdarkButton_Callback(hObject, eventdata, handles)
 % hObject    handle to addLanmdarkButton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+    handles = guidata(hObject);
     landmarkMode = get(hObject, 'Value');
     if landmarkMode
        handles.landmarkMode = 1;
@@ -1241,6 +1376,7 @@ function simulinkButton_ClickedCallback(hObject, eventdata, handles)
 % hObject    handle to simulinkButton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+    handles = guidata(hObject);
     actived = strcmp(get(hObject, 'State'), 'on');
     if actived
         bdclose(handles.modelName);
@@ -1272,6 +1408,7 @@ function landmarkButton_ClickedCallback(hObject, eventdata, handles)
 % hObject    handle to landmarkButton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+    handles = guidata(hObject);
     landmarkMode = strcmp(get(hObject, 'State'), 'on');
     if landmarkMode
        handles.landmarkMode = true;
@@ -1305,6 +1442,7 @@ function resolutionInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of resolutionInput as text
 %        str2double(get(hObject,'String')) returns contents of resolutionInput as a double
+    handles = guidata(hObject);
     value = str2double(get(hObject,'String'));
     if isnan(value) || value <= 0
         set(hObject, 'String', num2str(handles.gm_res));
@@ -1315,20 +1453,6 @@ function resolutionInput_Callback(hObject, eventdata, handles)
     guidata(hObject, handles);
 end
 
-% --- Executes during object creation, after setting all properties.
-function resolutionInput_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to resolutionInput (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
-    if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-        set(hObject,'BackgroundColor','white');
-    end
-end
-
-
 function xLimMaxInput_Callback(hObject, eventdata, handles)
 % hObject    handle to xLimMaxInput (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -1336,6 +1460,7 @@ function xLimMaxInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of xLimMaxInput as text
 %        str2double(get(hObject,'String')) returns contents of xLimMaxInput as a double
+    handles = guidata(hObject);
     value = str2double(get(hObject,'String'));
     if isnan(value) || value < handles.gm_xlim(1)
         set(hObject, 'String', num2str(handles.gm_xlim(2)));
@@ -1346,20 +1471,6 @@ function xLimMaxInput_Callback(hObject, eventdata, handles)
     guidata(hObject, handles);
 end
 
-% --- Executes during object creation, after setting all properties.
-function xLimMaxInput_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to xLimMaxInput (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
-    if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-        set(hObject,'BackgroundColor','white');
-    end
-end
-
-
 function xLimMinInput_Callback(hObject, eventdata, handles)
 % hObject    handle to xLimMinInput (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -1367,6 +1478,7 @@ function xLimMinInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of xLimMinInput as text
 %        str2double(get(hObject,'String')) returns contents of xLimMinInput as a double
+    handles = guidata(hObject);
     value = str2double(get(hObject,'String'));
     if isnan(value) || value > handles.gm_xlim(2)
         set(hObject, 'String', num2str(handles.gm_xlim(1)));
@@ -1377,20 +1489,6 @@ function xLimMinInput_Callback(hObject, eventdata, handles)
     guidata(hObject, handles);
 end
 
-% --- Executes during object creation, after setting all properties.
-function xLimMinInput_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to xLimMinInput (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
-    if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-        set(hObject,'BackgroundColor','white');
-    end
-end
-
-
 function yLimMaxInput_Callback(hObject, eventdata, handles)
 % hObject    handle to yLimMaxInput (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -1398,6 +1496,7 @@ function yLimMaxInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of yLimMaxInput as text
 %        str2double(get(hObject,'String')) returns contents of yLimMaxInput as a double
+    handles = guidata(hObject);
     value = str2double(get(hObject,'String'));
     if isnan(value) || value < handles.gm_ylim(1)
         set(hObject, 'String', num2str(handles.gm_ylim(2)));
@@ -1408,20 +1507,6 @@ function yLimMaxInput_Callback(hObject, eventdata, handles)
     guidata(hObject, handles);
 end
 
-% --- Executes during object creation, after setting all properties.
-function yLimMaxInput_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to yLimMaxInput (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
-    if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-        set(hObject,'BackgroundColor','white');
-    end
-end
-
-
 function yLimMinInput_Callback(hObject, eventdata, handles)
 % hObject    handle to yLimMinInput (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -1429,6 +1514,7 @@ function yLimMinInput_Callback(hObject, eventdata, handles)
 
 % Hints: get(hObject,'String') returns contents of yLimMinInput as text
 %        str2double(get(hObject,'String')) returns contents of yLimMinInput as a double
+    handles = guidata(hObject);
     value = str2double(get(hObject,'String'));
     if isnan(value) || value > handles.gm_ylim(2)
         set(hObject, 'String', num2str(handles.gm_ylim(1)));
@@ -1439,20 +1525,6 @@ function yLimMinInput_Callback(hObject, eventdata, handles)
     guidata(hObject, handles); 
 end
 
-% --- Executes during object creation, after setting all properties.
-function yLimMinInput_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to yLimMinInput (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
-
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
-    if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-        set(hObject,'BackgroundColor','white');
-    end
-end
-
-
 % --- Executes on button press in bitModeInput.
 function bitModeInput_Callback(hObject, eventdata, handles)
 % hObject    handle to bitModeInput (see GCBO)
@@ -1460,18 +1532,35 @@ function bitModeInput_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % Hint: get(hObject,'Value') returns toggle state of bitModeInput
+    handles = guidata(hObject);
     handles.gm_8bitMode = get(hObject, 'Value');
     guidata(hObject, handles); 
 end
-
 
 % --- Executes on button press in applyMapButton.
 function applyMapButton_Callback(hObject, eventdata, handles)
 % hObject    handle to applyMapButton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-    handles = initObjects(hObject);
+    handles = guidata(hObject);
+    handles = initObjects(handles);
     handles = initPlots(handles);
     updatePlots(hObject, handles);
     guidata(hObject, handles);
+end
+
+% --------------------------------------------------------------------
+function saveImageButon_ClickedCallback(hObject, eventdata, handles)
+% hObject    handle to saveImageButon (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+    handles = guidata(hObject);
+    filename = ['map_' getStringID(handles)];
+    path =  uiputfile({'*.png';'*.gif'; '*bmp'; '*tif'; '*pdf'}, ... 
+                      'Save map as image', ...
+                      filename);
+    if path ~= 0
+       %export_fig(handles.mapAxes, path);
+       imwrite(get(handles.imgmap, 'CData'), path);
+    end
 end

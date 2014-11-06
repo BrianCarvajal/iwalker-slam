@@ -114,10 +114,37 @@ classdef Plotter < handle
             end
         end
         
-        
-        function plotAnonymousLandmarks(pl, lans, tag)
+
+        function plotLineSegments(pl, segments, tag)
             if ~ishghandle(pl.ha)
                 pl.ha = Plotter.newAxes();
+            end
+            h = findobj(pl.ha, 'Tag', tag);
+            if ~isempty(h)
+                delete(h);
+            end
+            for obj = segments
+                % Line estimated
+                xx = [(obj.a(1) - 15) (obj.b(1) + 15)];
+                yy = obj.m*xx + obj.c;
+                h = line(xx, yy);
+                set(h, 'Parent', pl.ha, 'tag', tag);
+                % Segment estimated
+                h = line([obj.a(1) obj.b(1)], [obj.a(2) obj.b(2)], 'Color', 'g', 'LineWidth', 4);
+                set(h, 'Parent', pl.ha, 'tag', tag);
+                % Naive segment: endpoints
+                h = line([obj.X(1) obj.X(end)], [obj.Y(1) obj.Y(end)], 'Color', 'r', 'LineWidth', 1);
+                set(h, 'Parent', pl.ha, 'tag', tag);
+
+            end
+        end
+        
+        function plotAnonymousLandmarks(pl, lans, tag, local)
+            if ~ishghandle(pl.ha)
+                pl.ha = Plotter.newAxes();
+            end
+            if nargin < 4
+               local = false; 
             end
             h = findobj(pl.ha, 'Tag', tag);
             if ~isempty(h)
@@ -127,23 +154,32 @@ classdef Plotter < handle
             % Anonymous landmark
                     c1 = [190 30 30]./255;
                     c2 = [250 120 25]./255;
-                    h = plot(lan.x,lan.y, 'LineStyle','none', ...
-                                          'Marker','o', ...
-                                          'MarkerSize',5, ...
-                                          'MarkerEdgeColor',c1, ...
-                                          'MarkerFaceColor',c2, ...
-                                          'HitTest', 'off');
+                    if local
+                       lx = lan.posl(1);
+                       ly = lan.posl(2);
+                    else
+                        lx = lan.pos(1);
+                        ly = lan.pos(2);
+                    end
+                    h = plot(lx,ly,   'LineStyle','none', ...
+                                      'Marker','o', ...
+                                      'MarkerSize',5, ...
+                                      'MarkerEdgeColor',c1, ...
+                                      'MarkerFaceColor',c2, ...
+                                      'HitTest', 'off');
                     set(h, 'Tag', tag);
                     set(h, 'Parent', pl.ha);
                     set(h, 'UserData', lan);
-                    if ~isempty(lan.matched_landmark)
-                       Xl = [lan.x lan.matched_landmark.x];
-                       Yl = [lan.y lan.matched_landmark.y];
+                    
+                    
+                    if ~isempty(lan.matched_landmark) && ~local
+                       Xl = [lx lan.matched_landmark.x];
+                       Yl = [ly lan.matched_landmark.y];
                        raycolor = [rand*20 + 20, rand*20 + 180, rand*20 + 180]./255;
                        raywidth = rand*3 + 1;
                        h2 = line(Xl, Yl, 'Color', raycolor, 'LineWidth', raywidth);
                        set(h2, 'Tag', tag);
-                    set(h, 'Parent', pl.ha);
+                       set(h, 'Parent', pl.ha);
                     end
                     
             end
@@ -154,7 +190,7 @@ classdef Plotter < handle
             if ~ishghandle(pl.ha)
                 pl.ha = Plotter.newAxes();
             end
-            
+
             for lan = lans              
                 % Map landmark
                 ltag = [tag '.' num2str(lan.id)];
@@ -280,14 +316,14 @@ classdef Plotter < handle
             end
         end
         
-        function plotPoints(pl, X, Y, tag, color)
+        function plotPoints(pl, X, Y, tag, color, s)
             if ~ishghandle(pl.ha)
                 pl.ha = Plotter.newAxes();
             end
             
             h = findobj(pl.ha, 'Tag', tag);
             if isempty(h)
-                h = scatter(X, Y, 1, color);
+                h = scatter(X, Y, s, color);
                 set(h, 'Tag', tag);
                 set(h, 'Parent', pl.ha);
             else
@@ -301,15 +337,21 @@ classdef Plotter < handle
             if ~ishghandle(pl.ha)
                 pl.ha = Plotter.newAxes();
             end
-
+            if isempty(X) || numel(X) == 0
+                Xl = 0;
+                Yl = 0;
+            else
+                Xl = X(1);
+                Yl = Y(1);
+            end
             h = findobj(pl.ha, 'Tag', tag);
             if isempty(h)
-                h = patch([0 X 0], [0 Y 0], color, 'EdgeColor', 'none', 'HitTest', 'off');
+                h = patch([X Xl], [Y Yl], color, 'EdgeColor', 'none', 'HitTest', 'off');
                 alpha(h, alph);
                 set(h, 'Tag', tag);
                 set(h, 'Parent', pl.ha);
             else
-                set(h,'XData',[0 X 0], 'YData',[0 Y 0]);
+                set(h,'XData',[X Xl], 'YData',[Y Yl]);
             end
         end
         
@@ -329,7 +371,7 @@ classdef Plotter < handle
             
             h = findobj(pl.ha, 'Tag', [tag '.line']);
             if isempty(h)
-                h = line(X, Y, 'Color', [0.8 0.1 0.3], 'LineWidth', 2);
+                h = line(X, Y, 'Color', [0.1 0.1 0.9], 'LineWidth', 2);
                 set(h, 'Tag', [tag '.line']);
                 set(h, 'Parent', pl.ha);
             else

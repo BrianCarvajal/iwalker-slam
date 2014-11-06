@@ -8,8 +8,6 @@ function [FL, V] = splitAndMerge( p, threshold, maxOutliers)
 %   segment [Q, R]. If this distance is exceeded, the segment is splited in
 %   segments [Q, A] and [A, R]
 
-
-
 %%0 Initializations and parameters validation
     if nargout == 2
        V = []; 
