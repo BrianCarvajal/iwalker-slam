@@ -76,7 +76,7 @@ int urg_start_single_scan(void) {
     int res = 0;
     char msg[256];
     if (verbose) printf("URG: call urg_start_single_scan()\n");
-    sprintf(msg,"MS0044072500001\r");
+    sprintf(msg,"MS0044072500001\r\n");
     
     if (verbose) printf("URG: Sending text: %s\n", msg);
     if(!WriteFile(hCom, msg, strlen(msg), &dwBytesWritten, NULL))
