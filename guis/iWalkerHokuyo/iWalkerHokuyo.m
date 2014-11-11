@@ -71,7 +71,7 @@ function iWalkerHokuyo_OpeningFcn(hObject, eventdata, handles, varargin)
     try
         warning('off','MATLAB:HandleGraphics:ObsoletedProperty:JavaFrame');
         javaFrame = get(hObject,'JavaFrame');
-        javaFrame.setFigureIcon(javax.swing.ImageIcon([cd '\slam.gif']));
+        javaFrame.setFigureIcon(javax.swing.ImageIcon([cd '\icons\slam.gif']));
     end
      set(gcf, 'Pointer', 'watch');
     
