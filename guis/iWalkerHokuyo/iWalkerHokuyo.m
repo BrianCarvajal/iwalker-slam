@@ -22,7 +22,7 @@ function varargout = iWalkerHokuyo(varargin)
 
     % Edit the above text to modify the response to help iWalkerHokuyo
 
-    % Last Modified by GUIDE v2.5 28-Oct-2014 11:40:07
+    % Last Modified by GUIDE v2.5 13-Nov-2014 22:55:28
 
     % Begin initialization code - DO NOT EDIT
     gui_Singleton = 1;
@@ -670,6 +670,7 @@ function setState(hObject, state)
             set(handles.runStopButton, 'enable', 'on');
             set(handles.runStopButton, 'CData', handles.playIcon);
             set(handles.simulinkButton, 'enable', 'on');
+            set(handles.saveLogButton, 'enable', 'on');
             guidata(hObject, handles);
         case 'RUN'
             prevPointer = get(gcf, 'Pointer');
@@ -677,6 +678,7 @@ function setState(hObject, state)
             set(handles.stateText, 'string', 'Starting');
             set(handles.runStopButton, 'enable', 'off');
             set(handles.simulinkButton, 'enable', 'off');
+            set(handles.saveLogButton, 'enable', 'off');
             set(handles.stateText, 'backgroundcolor', [230 230 90]./255);
             strid = nextExperimentID();
             set(handles.experimentID, 'String', strid);
@@ -684,6 +686,7 @@ function setState(hObject, state)
             handles = initObjects(hObject);
             handles = initPlots(handles);
             guidata(hObject, handles);
+            clearWorkspace();
             set_param( modelName, 'SimulationCommand', 'start');
             set(handles.runStopButton, 'CData', handles.stopIcon);
             start(handles.plotTimer);
@@ -697,7 +700,7 @@ function setState(hObject, state)
             set(handles.runStopButton, 'enable', 'off');
             stop(handles.plotTimer);
             set_param( modelName, 'SimulationCommand', 'stop');
-            saveLog(handles);
+            %saveLog(handles); <- ahora se hace de forma manual
             guidata(hObject, handles);
             setState(hObject, 'READY');
         otherwise
@@ -707,28 +710,56 @@ function setState(hObject, state)
     end
 end
 
+function clearWorkspace()
+    try
+        evalin('base','clear drpm pose imu forces range');
+    end
+end
+
 function saveLog(handles)
     try
         dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
         id = get(handles.experimentID, 'String');
         filename = [id '_' dstr];
+        fprintf('Saving log %s ', filename);
+        % Nos aseguramos de que Simulink haya guardado los datos en el
+        % Base Workspace
+%         while true
+%             fprintf('...');
+%             vars = evalin('base', 'whos');
+%             vnames = {vars.name};
+%             if ismember('drpm', vnames) && ...
+%                ismember('pose', vnames) && ...
+%                ismember('imu', vnames) && ...
+%                ismember('forces', vnames) && ...
+%                ismember('range', vnames)
+%                 break;
+%             end
+%             pause(0.1);
+%         end
         drpm = evalin('base','drpm');
         pose = evalin('base','pose');
         imu = evalin('base','imu');
         forces = evalin('base','forces');
         range = evalin('base', 'range');
-        reactive = [handles.leftLambda ...
-                    handles.rightLambda ...
-                    handles.leftNu ...
-                    handles.rightNu];
+%         reactive = [handles.leftLambda ...
+%                     handles.rightLambda ...
+%                     handles.leftNu ...
+%                     handles.rightNu];
+        reactive = [ get_param([handles.modelName '/leftLambda'], 'Value') ...
+                     get_param([handles.modelName '/rightLambda'], 'Value') ...
+                     get_param([handles.modelName '/leftNu'], 'Value') ...
+                     get_param([handles.modelName '/rightNu'], 'Value') ];
+  
         save(filename, 'drpm', 'pose', 'imu', 'forces', 'range', 'reactive');
+        fprintf(' done!\n');
     catch
         errordlg('Problem saving the log', 'Error');
     end
 end
 
 function strid = nextExperimentID()
-    if exist('lastID.mat', 'file') ~= 2
+    if exist('lastID.mat', 'file') ~= 2lo 
         mfile = matfile('lastID.mat', 'Writable', true);
         id = 1;
     else
@@ -1474,4 +1505,35 @@ function applyMapButton_Callback(hObject, eventdata, handles)
     handles = initPlots(handles);
     updatePlots(hObject, handles);
     guidata(hObject, handles);
+end
+
+
+% --------------------------------------------------------------------
+function saveLogButton_ClickedCallback(hObject, eventdata, handles)
+% hObject    handle to saveLogButton (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+    dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
+    id = get(handles.experimentID, 'String');
+    filename = [id '_' dstr];
+    fprintf('Saving log %s...', filename);
+    path =  uiputfile('*.mat', 'Save log', filename);
+    if path ~= 0
+        try
+            drpm = evalin('base','drpm');
+            pose = evalin('base','pose');
+            imu = evalin('base','imu');
+            forces = evalin('base','forces');
+            range = evalin('base', 'range');
+            reactive = [handles.leftLambda ...
+                        handles.rightLambda ...
+                        handles.leftNu ...
+                        handles.rightNu];
+
+            save(filename, 'drpm', 'pose', 'imu', 'forces', 'range', 'reactive');
+            fprintf(' done!\n');
+        catch
+            errordlg('Problem saving the log', 'Error');
+        end
+    end
 end
