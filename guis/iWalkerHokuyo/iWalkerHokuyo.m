@@ -94,6 +94,7 @@ function iWalkerHokuyo_OpeningFcn(hObject, eventdata, handles, varargin)
     handles.modelName = 'iWalkerHokuyoModel';
     handles.landmarkMode = false;
     handles.infoTextMode = false;
+    handles.logSaved = true;
     
     %% User Inputs Parameters
     config = loadConfiguration(handles.configFile);
@@ -111,6 +112,7 @@ function iWalkerHokuyo_OpeningFcn(hObject, eventdata, handles, varargin)
     handles.gm_xlim = config.gm_xlim;
     handles.gm_ylim = config.gm_ylim;
     handles.gm_8bitMode = config.gm_8bitMode;
+    handles.saveLogDir = config.saveLogDir;
     set(handles.odometrySampleTimeInput, 'String', num2str(handles.odometrySampleTime));
     set(handles.imuSampleTimeInput, 'String', num2str(handles.imuSampleTime));
     set(handles.forcesSampleTimeInput, 'String', num2str(handles.forcesSampleTime));
@@ -278,6 +280,7 @@ function config = defaultConfiguration()
     config.gm_xlim = [-15 15];
     config.gm_ylim = [-15 15];
     config.gm_8bitMode = false;
+    config.saveLogDir = cd;
 end
 % Try to load the configuration file at dir and return it. 
 % If the file does not exist, it returns a default configuration.
@@ -305,6 +308,7 @@ function saveConfiguration(filepath, handles)
     config.gm_xlim = handles.gm_xlim;
     config.gm_ylim = handles.gm_ylim;
     config.gm_8bitMode = handles.gm_8bitMode;
+    config.saveLogDir = handles.saveLogDir;
     WriteYaml(filepath, config);
 end
 
@@ -490,7 +494,7 @@ function initModel(handles)
          load_system(modelName); % change for load_system for not open the model window
 
          % When the model starts, call the localAddEventListener function
-         set_param(modelName,'StartFcn',['localAddEventListener(''' modelName ''')']);
+         set_param(modelName,'StartFcn',['localAddEventListener(''' modelName ''');']);
 
         % Simulink may optimise your model by integrating all your blocks. To
         % prevent this, you need to disable the Block Reduction in the Optimisation
@@ -694,7 +698,7 @@ function setState(hObject, state)
             set(handles.landmarkButton, 'enable', 'on');
             set(handles.stateText, 'string', 'Running');
             set(handles.stateText, 'backgroundcolor', [130 230 115]./255);
-            set(gcf, 'Pointer', prevPointer);
+            set(gcf, 'Pointer', 'arrow');
             guidata(hObject, handles);
         case 'STOP'
             set(handles.runStopButton, 'enable', 'off');
@@ -716,50 +720,10 @@ function clearWorkspace()
     end
 end
 
-function saveLog(handles)
-    try
-        dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
-        id = get(handles.experimentID, 'String');
-        filename = [id '_' dstr];
-        fprintf('Saving log %s ', filename);
-        % Nos aseguramos de que Simulink haya guardado los datos en el
-        % Base Workspace
-%         while true
-%             fprintf('...');
-%             vars = evalin('base', 'whos');
-%             vnames = {vars.name};
-%             if ismember('drpm', vnames) && ...
-%                ismember('pose', vnames) && ...
-%                ismember('imu', vnames) && ...
-%                ismember('forces', vnames) && ...
-%                ismember('range', vnames)
-%                 break;
-%             end
-%             pause(0.1);
-%         end
-        drpm = evalin('base','drpm');
-        pose = evalin('base','pose');
-        imu = evalin('base','imu');
-        forces = evalin('base','forces');
-        range = evalin('base', 'range');
-%         reactive = [handles.leftLambda ...
-%                     handles.rightLambda ...
-%                     handles.leftNu ...
-%                     handles.rightNu];
-        reactive = [ get_param([handles.modelName '/leftLambda'], 'Value') ...
-                     get_param([handles.modelName '/rightLambda'], 'Value') ...
-                     get_param([handles.modelName '/leftNu'], 'Value') ...
-                     get_param([handles.modelName '/rightNu'], 'Value') ];
-  
-        save(filename, 'drpm', 'pose', 'imu', 'forces', 'range', 'reactive');
-        fprintf(' done!\n');
-    catch
-        errordlg('Problem saving the log', 'Error');
-    end
-end
+
 
 function strid = nextExperimentID()
-    if exist('lastID.mat', 'file') ~= 2lo 
+    if exist('lastID.mat', 'file') ~= 2
         mfile = matfile('lastID.mat', 'Writable', true);
         id = 1;
     else
@@ -1291,6 +1255,18 @@ function runStopButton_ClickedCallback(hObject, eventdata, handles)
     handles = guidata(hObject);
     switch upper(handles.state)
         case 'READY'
+            if ~handles.logSaved
+                answer = questdlg('The last log was not saved. Do you want to discard it?', ...
+                                  'Save Log', ...
+                                  'Discard and run', ...
+                                  'Cancel', ...
+                                  'Cancel');
+                if strcmp(answer,'Cancel')
+                    return;
+                end
+            end
+            handles.logSaved = false;
+            guidata(hObject, handles);
             setState(hObject, 'RUN');
         case 'RUN'
             setState(hObject, 'STOP');
@@ -1513,12 +1489,18 @@ function saveLogButton_ClickedCallback(hObject, eventdata, handles)
 % hObject    handle to saveLogButton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
+    saveLog(hObject, handles);
+end
+
+function saveLog(hObject, handles)
     dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
     id = get(handles.experimentID, 'String');
     filename = [id '_' dstr];
     fprintf('Saving log %s...', filename);
-    path =  uiputfile('*.mat', 'Save log', filename);
-    if path ~= 0
+    pathname = handles.saveLogDir;
+    [filename, pathname] =  uiputfile('*.mat', 'Save log', fullfile(pathname, filename));
+    if pathname ~= 0
+        handles.saveLogDir = pathname;
         try
             drpm = evalin('base','drpm');
             pose = evalin('base','pose');
@@ -1530,7 +1512,9 @@ function saveLogButton_ClickedCallback(hObject, eventdata, handles)
                         handles.leftNu ...
                         handles.rightNu];
 
-            save(filename, 'drpm', 'pose', 'imu', 'forces', 'range', 'reactive');
+            save(fullfile(pathname, filename), 'drpm', 'pose', 'imu', 'forces', 'range', 'reactive');
+            handles.logSaved = true;
+            guidata(hObject, handles);
             fprintf(' done!\n');
         catch
             errordlg('Problem saving the log', 'Error');
