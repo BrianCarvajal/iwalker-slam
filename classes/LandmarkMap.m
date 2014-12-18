@@ -18,6 +18,10 @@ classdef LandmarkMap < handle
         landmarks
     end
     
+    properties (Dependent = true)
+        numLandmarks
+    end
+    
     methods
         
         function map = LandmarkMap(name)
@@ -36,6 +40,14 @@ classdef LandmarkMap < handle
             %map.landmarks = QuadTreeNode(0, 0, 10);
             map.landmarks = [];
 
+        end
+        
+        function n = get.numLandmarks(map)
+           if isempty(map)
+               n = 0;
+           else
+              n = length(map.landmarks); 
+           end
         end
         
         function addLandmarks(map, lans)

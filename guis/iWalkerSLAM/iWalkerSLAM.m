@@ -22,7 +22,7 @@ function varargout = iWalkerSLAM(varargin)
 
     % Edit the above text to modify the response to help iWalkerSLAM
 
-    % Last Modified by GUIDE v2.5 31-Oct-2014 11:25:10
+    % Last Modified by GUIDE v2.5 05-Dec-2014 17:14:25
 
     % Begin initialization code - DO NOT EDIT
     gui_Singleton = 1;
@@ -56,6 +56,7 @@ function iWalkerSLAM_OpeningFcn(hObject, eventdata, handles, varargin)
     handles.output = hObject;
     
     
+    
     if ~isfield(handles, 'init')
        handles.init = true;
     else
@@ -76,9 +77,10 @@ function iWalkerSLAM_OpeningFcn(hObject, eventdata, handles, varargin)
     
      %% Set GUI icon
     try
+        iconpath = [parentpath(parentpath(mfilename('fullpath'))) filesep 'icons' filesep 'slam.gif'];
         warning('off','MATLAB:HandleGraphics:ObsoletedProperty:JavaFrame');
         javaFrame = get(hObject,'JavaFrame');
-        javaFrame.setFigureIcon(javax.swing.ImageIcon([cd '\slam.gif']));
+        javaFrame.setFigureIcon(javax.swing.ImageIcon(iconpath));
     end
     
 
@@ -178,12 +180,14 @@ function iWalkerSLAM_OpeningFcn(hObject, eventdata, handles, varargin)
     uicontrol('Parent', textGrid,'Style', 'text','String', 'EKF [x, y, th]'); 
     uicontrol('Parent', textGrid,'Style', 'text','String', 'EKF [Pxx, Pyy, Pxy]');
     uicontrol('Parent', textGrid,'Style', 'text','String', 'Lidar freq');
-    uicontrol('Parent', textGrid,'Style', 'text','String', 'Lidar samples ');    
+    uicontrol('Parent', textGrid,'Style', 'text','String', 'Lidar samples ');
+    uicontrol('Parent', textGrid,'Style', 'text','String', 'Landmarks');
     % Second column: values. We save the handles for update
     handles.info.ekf_x = uicontrol('Parent', textGrid,'Style', 'text','String', '0 0 0');
     handles.info.ekf_P = uicontrol('Parent', textGrid,'Style', 'text','String', '0 0 0');
     handles.info.lidar_freq = uicontrol('Parent', textGrid,'Style', 'text','String', '0');
     handles.info.lidar_samples = uicontrol('Parent', textGrid,'Style', 'text','String', '0');
+    handles.info.landmarks = uicontrol('Parent', textGrid,'Style', 'text','String', '0');
     
     % Set the sizes of the rows and columns of infoBox
     rows = length(get(textGrid, 'Children'))/2;
@@ -229,6 +233,7 @@ function iWalkerSLAM_OpeningFcn(hObject, eventdata, handles, varargin)
     handles.gm_xlim = config.gm_xlim;
     handles.gm_ylim = config.gm_ylim;
     handles.gm_8bitMode = config.gm_8bitMode;
+    handles.saveLogDir = cd;
     set(handles.odometrySampleTimeInput, 'String', num2str(handles.odometrySampleTime));
     set(handles.imuSampleTimeInput, 'String', num2str(handles.imuSampleTime));
     set(handles.forcesSampleTimeInput, 'String', num2str(handles.forcesSampleTime));
@@ -270,7 +275,7 @@ function iWalkerSLAM_OpeningFcn(hObject, eventdata, handles, varargin)
     zoom(handles.lidarAxes, 2);
     hold on;
     axis equal;
-
+    set( vbf, 'Sizes', [-1 -1], 'Spacing', 6 );
 %    % whitebg([0 0 0]);
 %     
 %     %% Init Global Map View
@@ -463,7 +468,7 @@ function MapClickCallback( hObject , eventData )
            handles.map.addLandmarks(land); 
            handles.ekf.innovation(land);
            handles.rob.x(1:3) = handles.ekf.x_est(1:3);
-           set(handles.numLandmarksText, 'string', num2str(length(handles.map.landmarks)));
+           updateInfoBox(handles);
            updatePlots(hObject, handles);
         end
 %         handles.map.addLandmarks(land); 
@@ -541,13 +546,13 @@ function updatePlots(hObject, handles)
     plMap.plotErrorXY(handles.ekf.P_est(1:2,1:2), handles.ekf.x_est(1:3), 'errorXY', 'c');
     plMap.plotErrorAngle(handles.ekf.P_est(3,3), handles.ekf.x_est(1:3), 'errorAngle', 'y');
     
-    mlands = handles.map.landmarks;
-    if ~isempty(mlands)
-       plMap.plotKnownLandmarks(mlands, 'MapLandmarks');
-    end
+%     mlands = handles.map.landmarks;
+%     if ~isempty(mlands)
+%        plMap.plotKnownLandmarks(mlands, 'MapLandmarks');
+%     end
     
     %if ~isempty(handles.landmarks)
-        plMap.plotAnonymousLandmarks(landmarks, 'ExtractedLandmarks');
+%         plMap.plotAnonymousLandmarks(landmarks, 'ExtractedLandmarks');
     %end
     plMap.plotScanArea(lid.pw(1,:), lid.pw(2,:), 'scan', [0 0.2 0.8], 0.5);
     %plMap.plotPoints(lid.pw(1,:), lid.pw(2,:), 'scanPoints', [1 0 0], 2);
@@ -558,10 +563,10 @@ function updatePlots(hObject, handles)
     %% Polar plot
     plLid.plotRobot([-0.35 0 0]', 'robL', [145 200 30]./255);
     
-    if ~isempty(splitAndMergeInfo)
-        plLid.plotSplitAndMerge(splitAndMergeInfo, 's&m');
-    end
-    plLid.plotAnonymousLandmarks(landmarks, 'Landmarks', true);
+%     if ~isempty(splitAndMergeInfo)
+%         plLid.plotSplitAndMerge(splitAndMergeInfo, 's&m');
+%     end
+%     plLid.plotAnonymousLandmarks(landmarks, 'Landmarks', true);
     plLid.plotPoints(lid.p(1,:), lid.p(2,:), 'scanPoints', [1 0 0], 3);
     plLid.plotScanArea(lid.p(1,:), lid.p(2,:), 'scanArea', [0 0.2 0.8], 0.4);
 %     if ~isempty(handles.landmarks)
@@ -581,7 +586,9 @@ function updateInfoBox(handles)
     set(handles.info.ekf_x, 'string', num2str(handles.ekf.x_est(1:3)','[%.2f]'));
     set(handles.info.ekf_P, 'string', num2str(ekf_P,'[%.2f]'));
     set(handles.info.lidar_freq, 'string', num2str(handles.lidarFreq, '%.1f'));
+
     set(handles.info.lidar_samples, 'string', num2str(handles.lidarLength, '%.2f'));
+    set(handles.info.landmarks, 'string', num2str(handles.map.numLandmarks, '%.2f'));
 end
 
 
@@ -728,9 +735,8 @@ function laserEventListener(rtb, eventdata)
     gm = handles.gm;
     map = handles.map;
     range = rtb.OutputPort(1).Data;
-    %Averiguar por que es necesaria la resta. Sin ella, se obtienen los
-    %puntos reflejados en el eje X
-    angle = rtb.OutputPort(2).Data; 
+%     angle = 360 - rtb.OutputPort(2).Data; % Quitar la resta con el lidar del walker
+    angle = rtb.OutputPort(2).Data;
     length = rtb.OutputPort(3).Data;
     handles.lidarLength = length;
     handles.lidarFreq = rtb.OutputPort(4).Data;    
@@ -751,15 +757,15 @@ function laserEventListener(rtb, eventdata)
 %     end
     %T = lid.globalTransform;
     %p = pTransform(lid.p, T);
-    [landmarks, info] = ext.extract(lid.range, lid.p, lid.pw);
-    handles.landmarks = landmarks;
-    handles.splitAndMergeInfo = info;
-    for lan = landmarks
-       if map.containsLandmark(lan, 0.30)
-          handles.ekf.innovation(lan);
-       end
-    end
-    handles.rob.x = handles.ekf.x_est(1:3);
+%     [landmarks, info] = ext.extract(lid.range, lid.p, lid.pw);
+%     handles.landmarks = landmarks;
+%     handles.splitAndMergeInfo = info;
+%     for lan = landmarks
+%        if map.containsLandmark(lan, 0.30)
+%           handles.ekf.innovation(lan);
+%        end
+%     end
+%     handles.rob.x = handles.ekf.x_est(1:3);
     %handles.laserCount = mod(handles.laserCount + 1, 1);
    % if handles.laserCount == 0
 
@@ -1346,36 +1352,87 @@ function addLanmdarkButton_Callback(hObject, eventdata, handles)
     guidata(hObject, handles);
 end
 
-
-
-function numLandmarksText_Callback(hObject, eventdata, handles)
-% hObject    handle to numLandmarksText (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'String') returns contents of numLandmarksText as text
-%        str2double(get(hObject,'String')) returns contents of numLandmarksText as a double
+%-------------------------------------------------------------------------%
+%                       GUI buttons
+%-------------------------------------------------------------------------%
+function applyMapButton_Callback(hObject, eventdata, handles)
+    handles = guidata(hObject);
+    handles = initObjects(handles);
+    handles = initPlots(handles);
+    updatePlots(hObject, handles);
+    guidata(hObject, handles);
 end
 
-% --- Executes during object creation, after setting all properties.
-function numLandmarksText_CreateFcn(hObject, eventdata, handles)
-% hObject    handle to numLandmarksText (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    empty - handles not created until after all CreateFcns called
+function bitModeInput_Callback(hObject, eventdata, handles)
+    handles = guidata(hObject);
+    handles.gm_8bitMode = get(hObject, 'Value');
+    guidata(hObject, handles); 
+end
 
-% Hint: edit controls usually have a white background on Windows.
-%       See ISPC and COMPUTER.
-    if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
-        set(hObject,'BackgroundColor','white');
+function resolutionInput_Callback(hObject, eventdata, handles)
+    handles = guidata(hObject);
+    value = str2double(get(hObject,'String'));
+    if isnan(value) || value <= 0
+        set(hObject, 'String', num2str(handles.gm_res));
+    else
+        handles.gm_res = value;
+        set(hObject, 'String', num2str(value));
     end
+    guidata(hObject, handles);
 end
 
+function xLimMaxInput_Callback(hObject, eventdata, handles)
+    handles = guidata(hObject);
+    value = str2double(get(hObject,'String'));
+    if isnan(value) || value < handles.gm_xlim(1)
+        set(hObject, 'String', num2str(handles.gm_xlim(2)));
+    else
+        handles.gm_xlim(2) = value;
+        set(hObject, 'String', num2str(value));
+    end
+    guidata(hObject, handles);
+end
 
-% --------------------------------------------------------------------
+function xLimMinInput_Callback(hObject, eventdata, handles)
+    handles = guidata(hObject);
+    value = str2double(get(hObject,'String'));
+    if isnan(value) || value > handles.gm_xlim(2)
+        set(hObject, 'String', num2str(handles.gm_xlim(1)));
+    else
+        handles.gm_xlim(1) = value;
+        set(hObject, 'String', num2str(value));
+    end
+    guidata(hObject, handles);
+end
+
+function yLimMaxInput_Callback(hObject, eventdata, handles)
+    handles = guidata(hObject);
+    value = str2double(get(hObject,'String'));
+    if isnan(value) || value < handles.gm_ylim(1)
+        set(hObject, 'String', num2str(handles.gm_ylim(2)));
+    else
+        handles.gm_ylim(2) = value;
+        set(hObject, 'String', num2str(value));
+    end
+    guidata(hObject, handles);
+end
+
+function yLimMinInput_Callback(hObject, eventdata, handles)
+    handles = guidata(hObject);
+    value = str2double(get(hObject,'String'));
+    if isnan(value) || value > handles.gm_ylim(2)
+        set(hObject, 'String', num2str(handles.gm_ylim(1)));
+    else
+        handles.gm_ylim(1) = value;
+        set(hObject, 'String', num2str(value));
+    end
+    guidata(hObject, handles); 
+end
+
+%-------------------------------------------------------------------------%
+%                       Toolbar buttons
+%-------------------------------------------------------------------------%
 function simulinkButton_ClickedCallback(hObject, eventdata, handles)
-% hObject    handle to simulinkButton (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
     handles = guidata(hObject);
     actived = strcmp(get(hObject, 'State'), 'on');
     if actived
@@ -1387,12 +1444,7 @@ function simulinkButton_ClickedCallback(hObject, eventdata, handles)
     end
 end
 
-
-% --------------------------------------------------------------------
 function runStopButton_ClickedCallback(hObject, eventdata, handles)
-% hObject    handle to runStopButton (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
     handles = guidata(hObject);
     switch upper(handles.state)
         case 'READY'
@@ -1402,12 +1454,19 @@ function runStopButton_ClickedCallback(hObject, eventdata, handles)
     end
 end
 
+function saveImageButon_ClickedCallback(hObject, eventdata, handles)
+    handles = guidata(hObject);
+    filename = ['map_' getStringID(handles)];
+    path =  uiputfile({'*.png';'*.gif'; '*bmp'; '*tif'; '*pdf'}, ... 
+                      'Save map as image', ...
+                      filename);
+    if path ~= 0
+       %export_fig(handles.mapAxes, path);
+       imwrite(get(handles.imgmap, 'CData'), path);
+    end
+end
 
-% --------------------------------------------------------------------
 function landmarkButton_ClickedCallback(hObject, eventdata, handles)
-% hObject    handle to landmarkButton (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
     handles = guidata(hObject);
     landmarkMode = strcmp(get(hObject, 'State'), 'on');
     if landmarkMode
@@ -1433,134 +1492,36 @@ function landmarkButton_ClickedCallback(hObject, eventdata, handles)
     guidata(hObject, handles);
 end
 
-
-
-function resolutionInput_Callback(hObject, eventdata, handles)
-% hObject    handle to resolutionInput (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'String') returns contents of resolutionInput as text
-%        str2double(get(hObject,'String')) returns contents of resolutionInput as a double
-    handles = guidata(hObject);
-    value = str2double(get(hObject,'String'));
-    if isnan(value) || value <= 0
-        set(hObject, 'String', num2str(handles.gm_res));
-    else
-        handles.gm_res = value;
-        set(hObject, 'String', num2str(value));
-    end
-    guidata(hObject, handles);
-end
-
-function xLimMaxInput_Callback(hObject, eventdata, handles)
-% hObject    handle to xLimMaxInput (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'String') returns contents of xLimMaxInput as text
-%        str2double(get(hObject,'String')) returns contents of xLimMaxInput as a double
-    handles = guidata(hObject);
-    value = str2double(get(hObject,'String'));
-    if isnan(value) || value < handles.gm_xlim(1)
-        set(hObject, 'String', num2str(handles.gm_xlim(2)));
-    else
-        handles.gm_xlim(2) = value;
-        set(hObject, 'String', num2str(value));
-    end
-    guidata(hObject, handles);
-end
-
-function xLimMinInput_Callback(hObject, eventdata, handles)
-% hObject    handle to xLimMinInput (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'String') returns contents of xLimMinInput as text
-%        str2double(get(hObject,'String')) returns contents of xLimMinInput as a double
-    handles = guidata(hObject);
-    value = str2double(get(hObject,'String'));
-    if isnan(value) || value > handles.gm_xlim(2)
-        set(hObject, 'String', num2str(handles.gm_xlim(1)));
-    else
-        handles.gm_xlim(1) = value;
-        set(hObject, 'String', num2str(value));
-    end
-    guidata(hObject, handles);
-end
-
-function yLimMaxInput_Callback(hObject, eventdata, handles)
-% hObject    handle to yLimMaxInput (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'String') returns contents of yLimMaxInput as text
-%        str2double(get(hObject,'String')) returns contents of yLimMaxInput as a double
-    handles = guidata(hObject);
-    value = str2double(get(hObject,'String'));
-    if isnan(value) || value < handles.gm_ylim(1)
-        set(hObject, 'String', num2str(handles.gm_ylim(2)));
-    else
-        handles.gm_ylim(2) = value;
-        set(hObject, 'String', num2str(value));
-    end
-    guidata(hObject, handles);
-end
-
-function yLimMinInput_Callback(hObject, eventdata, handles)
-% hObject    handle to yLimMinInput (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hints: get(hObject,'String') returns contents of yLimMinInput as text
-%        str2double(get(hObject,'String')) returns contents of yLimMinInput as a double
-    handles = guidata(hObject);
-    value = str2double(get(hObject,'String'));
-    if isnan(value) || value > handles.gm_ylim(2)
-        set(hObject, 'String', num2str(handles.gm_ylim(1)));
-    else
-        handles.gm_ylim(1) = value;
-        set(hObject, 'String', num2str(value));
-    end
-    guidata(hObject, handles); 
-end
-
-% --- Executes on button press in bitModeInput.
-function bitModeInput_Callback(hObject, eventdata, handles)
-% hObject    handle to bitModeInput (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-
-% Hint: get(hObject,'Value') returns toggle state of bitModeInput
-    handles = guidata(hObject);
-    handles.gm_8bitMode = get(hObject, 'Value');
-    guidata(hObject, handles); 
-end
-
-% --- Executes on button press in applyMapButton.
-function applyMapButton_Callback(hObject, eventdata, handles)
-% hObject    handle to applyMapButton (see GCBO)
-% eventdata  reserved - to be defined in a future version of MATLAB
-% handles    structure with handles and user data (see GUIDATA)
-    handles = guidata(hObject);
-    handles = initObjects(handles);
-    handles = initPlots(handles);
-    updatePlots(hObject, handles);
-    guidata(hObject, handles);
-end
-
 % --------------------------------------------------------------------
-function saveImageButon_ClickedCallback(hObject, eventdata, handles)
-% hObject    handle to saveImageButon (see GCBO)
+function saveLogButton_ClickedCallback(hObject, eventdata, handles)
+% hObject    handle to saveLogButton (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-    handles = guidata(hObject);
-    filename = ['map_' getStringID(handles)];
-    path =  uiputfile({'*.png';'*.gif'; '*bmp'; '*tif'; '*pdf'}, ... 
-                      'Save map as image', ...
-                      filename);
-    if path ~= 0
-       %export_fig(handles.mapAxes, path);
-       imwrite(get(handles.imgmap, 'CData'), path);
+    saveLog(hObject, handles);
+end
+
+function saveLog(hObject, handles)
+    dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
+    id = get(handles.experimentID, 'String');
+    filename = [id '_' dstr];
+    fprintf('Saving log %s...', filename);
+    pathname = handles.saveLogDir;
+    [filename, pathname] =  uiputfile('*.mat', 'Save log', fullfile(pathname, filename));
+    if pathname ~= 0
+        handles.saveLogDir = pathname;
+        try
+            rph = evalin('base','rph');
+            pose = evalin('base','pose');
+            range = evalin('base','range');
+            angle = evalin('base','angle');
+
+
+            save(fullfile(pathname, filename), 'rph', 'pose', 'range', 'angle');
+            handles.logSaved = true;
+            guidata(hObject, handles);
+            fprintf(' done!\n');
+        catch
+            errordlg('Problem saving the log', 'Error');
+        end
     end
 end

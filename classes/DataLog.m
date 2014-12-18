@@ -1,94 +1,110 @@
-%TODO: interrupt mode
-
-classdef DataLog < handle
-    %UNTITLED Summary of this class goes here
-    %   Detailed explanation goes here
-    
-    properties (SetAccess = private)
-        laser
-        wheels
+classdef DataLog < hgsetget
+  
+    properties
+        % Log input data
+        pose    % pose computed by iWheels (mm)
+        w       % angular speed
+        range   % range data of the laser (m)
+        angle   % angle data of the laser (degrees)
+        
+        % Log output data
+        rob_x
+        ekf_x
+        ekf_P
     end
     
     properties (Access = private)
-        i_wheel
-        i_laser
+       i_wheels
+       i_lidar
     end
     
+    properties (Dependent)
+        endTime 
+    end
+   
     methods
-        function dlog =  DataLog(path)
-            load(path);
-            dlog.laser.data = Laser_d.signals.values;
-            dlog.laser.length = size(Laser_d.signals.values, 1);
-            dlog.laser.time =  Laser_d.time;
-            dlog.laser.dt = Laser_d.time(2) - Laser_d.time(1);
+        function obj = DataLog(varargin)
+            % Set default property values
+           obj.pose =  [];
+           obj.w = [];
+           obj.range = [];
+           obj.angle = [];
+           
+           % Set user-supplied property values
+            if nargin > 0
+                set(obj, varargin{:} );  
+            end
+           
+           obj.rob_x = timeseries();
+           obj.rob_x.name = 'rob_x';
+           obj.ekf_x = timeseries();
+           obj.ekf_x.name = 'ekf_x';
+           obj.ekf_P = timeseries();
+           obj.ekf_P.name = 'ekf_P';
+           
+        end
+       
+        function t = get.endTime(obj)
+           t = 0;
+           if ~isempty(obj.pose) 
+               t = max(t, obj.pose.TimeInfo.End);
+           end
+           if ~isempty(obj.range)
+               t = max(t, obj.range.TimeInfo.End);
+           end
+           
+        end
             
-            dlog.wheels.data = Wheel_rpm.signals.values;
-            dlog.wheels.length = size(Wheel_rpm.signals.values, 1);
-            dlog.wheels.time = Wheel_rpm.time;
-            dlog.wheels.dt = Wheel_rpm.time(2) - Wheel_rpm.time(1);
+              
+        function b = remainingData(obj)
+            b = obj.i_wheels <= obj.pose.TimeInfo.Length && ...
+                obj.i_lidar <= obj.range.TimeInfo.Length;   
             
-            dlog.startPolling();
         end
         
-        function [data, time] = getData(dlog, source, i)
+        function [source, data, ts] = getData(obj)
+            pose_available =  obj.i_wheels <= obj.pose.TimeInfo.Length;
+            lidar_available = obj.i_lidar <= obj.range.TimeInfo.Length;
+
+            if pose_available && lidar_available             
+                if obj.pose.Time(obj.i_wheels) <= obj.range.Time(obj.i_lidar)
+                   source = 'wheels';
+                else
+                    source = 'lidar';
+                end
+            elseif pose_available
+                source = 'wheels';
+            elseif lidar_available
+                source = 'lidar';
+            else
+                source = 'none';
+                data = [];
+                ts = [];
+            end
+            
             switch source
                 case 'wheels'
-                    if i < 1 || i > dlog.wheels.length
-                       error('Index out of bounds'); 
+                    % computation of the odometry based on two consecutive
+                    % poses. Data = odo = [dx, dtheta]
+                    if (obj.i_wheels == 1)
+                        data = [0 0];
+                    else
+                        X = obj.pose.Data(obj.i_wheels,:);
+                        Xp = obj.pose.Data(obj.i_wheels - 1,:);
+                        data = [ sqrt((X(1)-Xp(1))^2 + (Y(2)-Xp(2))^2) X(3)-Xp(3)]/1000;
+                        
+                        if sum(obj.w.Data(obj.i_wheels, :)) < 0 %if negative velocity, dx is negative 
+                            data(1) = -data(1);
+                        end
+
                     end
-                    data = dlog.wheels.data(i, :);
-                    time = dlog.wheels.time(i);
-                case 'laser'
-                    if i < 1 || i > dlog.laser.length
-                       error('Index out of bounds'); 
-                    end
-                    data = dlog.laser.data(i, :);
-                    time = dlog.laser.time(i);
-                otherwise
-                    error('Source must be wheels or laser');                    
+                    ts = obj.pose.Time(obj.i_wheels);
+                    obj.i_wheels = obj.i_wheels + 1;
+                case 'lidar'
+                    data = [obj.range.Data(obj.i_lidar,:) ; obj.angle.Data(obj.i_lidar,:)];
+                    ts = obj.range.Time;
             end
         end
-        
-        function startPolling(dlog)
-            dlog.i_wheel = 1;
-            dlog.i_laser = 1;
-        end
-        
-        function b = availableData(dlog)
-            b = dlog.i_wheel <= dlog.wheels.length || ...
-                dlog.i_laser <= dlog.laser.length;
-        end
-        
-        function [data, time, source] = nextData(dlog)
-            iw = dlog.i_wheel;
-            il = dlog.i_laser;
-            if iw <= dlog.wheels.length && il <= dlog.laser.length
-                if dlog.wheels.time(iw) <= dlog.laser.time(il)
-                    source = 'wheels';
-                else
-                    source = 'laser';
-                end
-            elseif iw <= dlog.wheels.length
-                source = 'wheels';
-            elseif il <= dlog.laser.length
-                source= 'laser';
-            else
-                error('No data available');
-            end
-            
-            switch (source)
-                case 'wheels'
-                    data = dlog.wheels.data(iw,:);
-                    time = dlog.wheels.time(iw);
-                    dlog.i_wheel = iw + 1;
-                case 'laser'
-                    data = dlog.laser.data(il,:);
-                    time = dlog.wheels.time(il);
-                    dlog.i_laser = il + 1;
-            end          
-        end                
-               
     end
-    
 end
 

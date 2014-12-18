@@ -3,10 +3,15 @@ classdef LineSegment < handle
     %   Detailed explanation goes here
     
     properties
-        X, Y              % points of the segment
+        X, Y            % points of the segment
         m, c            % y = m*x + c
         rho, theta      % y*sin(theta) = rho - x*cos(theta)
         a, b            % endpoints of the segment       
+    end
+    
+    properties (Dependent = true)
+        n               % number of points
+        d               % distance from point a to b     
     end
     
     methods
@@ -37,9 +42,21 @@ classdef LineSegment < handle
             obj.b = b;
         end
         
+        function n = get.n(obj)
+           n = size(obj.X,2); 
+        end
+        
+        function d = get.d(obj)
+           d = sqrt(((obj.a(1)-obj.b(1))^2) + ((obj.a(2)-obj.b(2))^2));
+        end
+        
         function p = intersect(s1, s2)
            p(1) = (s2.c - s1.c)/(s1.m - s2.m);
            p(2) = s1.m * p(1) + s1.c;
+        end
+        
+        function e = compare(s1, s2)
+           e = sqrt((s1.rho - s2.rho)^2 + (s1.theta - s2.theta)^2);
         end
         
         function h = plot(obj)

@@ -57,14 +57,14 @@ classdef EKFSLAM < handle
                 error('robot, V_est and P0 are mandatory parameters');
             end
             
-            if ~isempty(robot) && ~isa(robot, 'DifferentialRobot')
+            if ~isempty(robot) && ~(isa(robot, 'DifferentialRobot')  || isa(robot, 'Vehicle'))
                 error('expecting DifferentialRobot object');
             end
             
             %% optional parameters validation
             p = inputParser();
             p.addOptional('joseph', true, @islogical);
-            p.addOptional('estMap', true, @islogical);
+            p.addOptional('estMap', false, @islogical);
             p.addOptional('history', true, @islogical);
             p.addOptional('verbose', false, @islogical);
             p.addOptional('W', []);
@@ -117,7 +117,7 @@ classdef EKFSLAM < handle
             ekf.P_est = ekf.P0;               
         end
         
-        function prediction(ekf, odo)
+        function ekf = prediction(ekf, odo)
             % split the state vector and covariance into chunks for
             % vehicle and map
             xv_est = ekf.x_est(1:3);

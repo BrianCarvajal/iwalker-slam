@@ -1,4 +1,4 @@
-%DifferentialRobot vehicle class
+%DifferentialRobot Differential robot class
 %
 % This class models the kinematics of a differential wheeled robot.  For
 % given steering and velocity inputs it updates the true vehicle state and returns
@@ -51,19 +51,11 @@
 % Notes::
 % - Subclasses the MATLAB handle class which means that pass by reference semantics
 %   apply.
-%
-% Reference::
-%
-%   Robotics, Vision & Control,
-%   Peter Corke,
-%   Springer 2011
-%
-% See also RandomPath, EKF, LIDAR.
 
 % Copyright (C) 2014, by Brian Carvajal Meza, based in Peter I. Corke code,
 % part of The Robotics Toolbox for Matlab (RTB).
 %
-% This file is part of my master thesis.
+% This file is part of a master thesis.
 %
 % RTB is free software: you can redistribute it and/or modify
 % it under the terms of the GNU Lesser General Public License as published by
@@ -209,19 +201,9 @@ classdef DifferentialRobot < handle
         end
         
         function max = maxspeed(rob, angularSpeed)
-            %Compute the current maximum speed depending on the angular velocity
+            %Computes the current maximum speed depending on the angular velocity
             max = rob.maxwspeed - (angularSpeed * rob.S / 2);
-        end
-        
-        
-        
-        function T = transform_matrix(rob)
-            T = se2(rob.x(1), rob.x(2), rob.x(3));
-        end
-        
-        function setX(rob, x)
-            rob.x = x;
-        end
+        end   
         
         function xnext = f(rob, x, odo, w)
             %DifferentialRobot.f Predict next state based on odometry
@@ -240,14 +222,14 @@ classdef DifferentialRobot < handle
             dd = odo(1) + w(1);
             dth = odo(2);
             
-            %             % straightforward code:
-            %             % thp = x(3) + dth;
-            %             % xnext = zeros(1,3);
-            %             % xnext(1) = x(1) + (dd + w(1))*cos(thp);
-            %             % xnext(2) = x(2) + (dd + w(1))*sin(thp);
-            %             % xnext(3) = x(3) + dth + w(2);
-            %             %
-            %             % vectorized code:
+            % straightforward code:
+            % thp = x(3) + dth;
+            % xnext = zeros(1,3);
+            % xnext(1) = x(1) + (dd + w(1))*cos(thp);
+            % xnext(2) = x(2) + (dd + w(1))*sin(thp);
+            % xnext(3) = x(3) + dth + w(2);
+            %
+            % vectorized code:
             
             thp = x(:,3) + dth;
             xnext = x + [(dd+w(1))*cos(thp)  (dd+w(1))*sin(thp) ones(size(x,1),1)*dth+w(2)];
@@ -265,8 +247,6 @@ classdef DifferentialRobot < handle
             % Notes::
             % - Appends new state to state history property x_hist.
             % - Odometry is also saved as property odometry.
-            
-            
             if nargin < 3
                 rob.w(1) = (u(1) + (u(2)*rob.S/2)) / rob.r; % right wheel
                 rob.w(2) = (u(1) - (u(2)*rob.S/2)) / rob.r; % left wheel
@@ -280,7 +260,8 @@ classdef DifferentialRobot < handle
             rob.x(3) = xp(3) + u(2)*rob.dt;
             
             odo = [colnorm(rob.x(1:2)-xp(1:2)) rob.x(3)-xp(3)];
-            % If speed is negative, the odometry must be negative too
+            
+            % If speed is negative, the odometry must be negative also
             if u(1) < 0
                 odo(1) = -odo(1);
             end
@@ -303,43 +284,48 @@ classdef DifferentialRobot < handle
             %u(1) = min(u(1), veh.maxwspeed);
             %u(2) = min(u(2), veh.maxwspeed);
             
-            %             rps = rph/3600;
-            %
-            %             vL = rps(1) * rob.r;
-            %             vR = rps(2) * rob.r;
-            %
-            %             speed = (vR + vL) / 2;
-            %             steer = (vR - vL) / rob.S;
-            %
-            %             odo = rob.update([speed, steer], rph);
+%             rps = rph/3600;
+%             vL = rps(1) * rob.r;
+%             vR = rps(2) * rob.r;
+%             speed = (vR + vL) / 2;
+%             steer = (vR - vL) / rob.S; 
+%             odo = rob.update([speed, steer], rph);
             vL = w(1) * rob.r;
             vR = w(2) * rob.r;
-            
+           
             speed = (vR + vL) / 2;
             steer = (vR - vL) / rob.S;
             
-            dx = speed * cos(rob.x(3)) * rob.dt;
-            dy = speed * sin(rob.x(3)) * rob.dt;
-            dth = steer * rob.dt;
-            
-            xp = rob.x;
-            rob.x(1) = rob.x(1) + dx;
-            rob.x(2) = rob.x(2) + dy;
-            rob.x(3) = rob.x(3) + dth;
-            
-            odo = [colnorm(rob.x(1:2)-xp(1:2)) rob.x(3)-xp(3)];
-            % If speed is negative, the odometry must be negative too
-            if w(1)+w(2) < 0
-                odo(1) = -odo(1);
-            end
-            rob.odometry = odo;
-            
-            rob.x_hist = [rob.x_hist; rob.x'];   % maintain history
+            odo = rob.update([speed steer], w);            
+%             dx = speed * cos(rob.x(3)) * rob.dt;
+%             dy = speed * sin(rob.x(3)) * rob.dt;
+%             dth = steer * rob.dt;
+%             
+%             xp = rob.x;
+%             rob.x(1) = rob.x(1) + dx;
+%             rob.x(2) = rob.x(2) + dy;
+%             rob.x(3) = rob.x(3) + dth;
+%             
+%             odo = [colnorm(rob.x(1:2)-xp(1:2)) rob.x(3)-xp(3)];
+%             % If speed is negative, the odometry must be negative too
+%             if w(1)+w(2) < 0
+%                 odo(1) = -odo(1);
+%             end
+%             rob.odometry = odo;
+%             
+%             rob.x_hist = [rob.x_hist; rob.x'];   % maintain history
         end
         
         function odo = updateOdometry(rob, odo)
-            rob.x = rob.f(rob.x', odo)';
-            
+            %DifferentialRobot.updateOdometry Update the vehicle state
+            %
+            % ODO = rob.update(ODO) updates the robot state and mantain the
+            % history with the given odometry ODO.
+            %
+            % Notes::
+            % - Appends new state to state history property x_hist.
+            % - Odometry is also saved as property odometry.
+            rob.x = rob.f(rob.x', odo)';          
             rob.odometry = odo;
             rob.w = [0 0];
             rob.x_hist = [rob.x_hist; rob.x'];   % maintain history
@@ -442,12 +428,12 @@ classdef DifferentialRobot < handle
             % See also DifferentialRobot.run, DifferentialRobot.step.
             rob.init(x0);
             
-            if nargout == 0
-                if ~isempty(rob.driver)
-                    rob.driver.visualize();
-                end
-                rob.visualize();
-            end
+%             if nargout == 0
+%                 if ~isempty(rob.driver)
+%                     rob.driver.visualize();
+%                 end
+%                 rob.visualize();
+%             end
             
             for i=1:(T/rob.dt)
                 rob.update([speed steer]);
