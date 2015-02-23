@@ -422,7 +422,7 @@ classdef (Sealed) iWalkerSLAM < handle
                 %% Open and set model
                 modelName = this.settings.values.Simulink_model;
                 
-                open_system(modelName); % change for load_system for not open the model window
+                load_system(modelName); % change for load_system for not open the model window
                 
                 % When the model starts, call the localAddEventListener function
                 set_param(modelName,'StartFcn','gui.localAddEventListener');

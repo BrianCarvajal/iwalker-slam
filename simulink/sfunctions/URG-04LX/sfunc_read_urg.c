@@ -296,13 +296,13 @@ static void mdlOutputs(SimStruct *S, int_T tid) {
     char car;
     
     //printf("asignacion: %d\n",n = readURG(&car, sizeof(car)));
-    printf("lectura de laser: \n");
+    //printf("lectura de laser: \n");
     act = 0;
     while((readURG(&car, sizeof(car)))==1) {
         
         buf[act] = car;
         act++;
-        printf("%c",car);
+       // printf("%c",car);
         if ((act>1) && ((buf[act-1] == '\r') || (buf[act-1] == '\n')) && ((buf[act-2] == '\r') || (buf[act-2] == '\n'))) {
             
 //            if (act==1435) {
@@ -339,18 +339,18 @@ static void mdlOutputs(SimStruct *S, int_T tid) {
             
             if (act>15)  {
                 
-                printf("\npeticion Nueva Captura Laser\n");
+     //           printf("\npeticion Nueva Captura Laser\n");
             }
             
         }
         
     }
    
-    printf("\nfin lectura laser\n");
+   // printf("\nfin lectura laser\n");
     
     for (i=0; i<682; i++) y[i] = res[i];
     
-    printf("copia realizada en Output laser\n");
+ //   printf("copia realizada en Output laser\n");
     urg_start_single_scan();
     /*   if (act_urg<SAMPLES_URG) {
     //    timesUrg[act_urg] = timestamp.tv_sec*1000000 + timestamp.tv_usec;
