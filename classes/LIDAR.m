@@ -1,9 +1,9 @@
 %LIDAR sensor class
 %
-% This class models the sensor LIDAR URG-04LX
+% This class models a Light Detection and Ranging, aka, LIDAR
 %
 % Methods::
-%   setRangeData    set new range data
+%   newScan    set new range data
 %   Hx
 %
 %
@@ -21,32 +21,38 @@
 %
 % See also DifferentialRobot
 
-classdef LIDAR < handle
+classdef LIDAR < hgsetget
     
-    
-    properties
-        robot           % robot where the LIDAR is attached
-        T               % transform matrix to robot frame
-        plotTag
+    properties 
+       validRange       % [min, max], valid range
+       horizon          %
+       deadAngle        %
+       outlierDist
     end
     
     properties (SetAccess = private)
-        data_length = 682;     % number of points sensed
-        ang = zeros(1, 682);      % angles of the sensed points
-        range = zeros(1, 682);        % ranges of the sensed points
-        timestamp       % acquisition time, expressed in seconds
-        p       = zeros(2, 682);        % cartesian points
-        pw
-        x
+        robot           % robot where the LIDAR is attached
+        T               % transform matrix to robot frame
+        angle           % angles of the sensed points
+        range           % ranges of the sensed points
+        p               % cartesian points in local frame
+        pw              % cartesian points in world frame
+        
+        valid
+        outliers
+        inDeadAngle
+        outRange
     end
     
-    properties (Access = private)
-        lupsin = zeros(1, 682);            % lookup table for sin
-        lupcos = zeros(1, 682);           % lookup table for cos
+    properties (Dependent = true)
+        count           % number of sensed points
+        Tw              % transformation matrix to world frame
+        x               % location in the world frame
     end
+    
     
     methods
-        function lid = LIDAR(robot, T)
+        function this = LIDAR()
         %LIDAR object constructor
         %
         % lid = LIDAR(ROB, T) is an object representing a URG-04LX LIDAR.
@@ -63,159 +69,84 @@ classdef LIDAR < handle
         %   lid = LIDAR(rob, T);
         %
         % See also DifferentialRobot.
-            if nargin == 0
-               robot = [];
-               T = se2(0,0,0);
-            
-            else
-                if isempty(robot) || ~isa(robot, 'DifferentialRobot')
-                error('robot must be DifferentialRobot object');
-                end
-                if isempty(T) || ~isequal(size(T),[3 3])
-                    error('T must be a 3x3 matrix');
-                end
-            end
-            lid.robot = robot;
-            lid.T = T;
-            lid.data_length = 682;
-            lid.plotTag = 'LIDAR.plot';
-            lid.x = [0 0];
-            
-            % precalculate the angles for cartesian conversion
-            
-            for i = 1 : lid.data_length
-                lid.ang(i) = ((0.3515625 *(i - 1)) - 120) * pi / 180.0;
-                lid.lupsin(i) = sin(lid.ang(i));
-                lid.lupcos(i) = cos(lid.ang(i));
-            end
-            lid.setRangeData(zeros(1,682), 0);
+
+            this.robot = [];
+            this.T = se2(0,0,0);
+            this.angle = [];
+            this.range = [];
+            this.validRange = [0.2 5];
+            this.horizon = 6;
+            this.outlierDist = 0.30;
+            this.deadAngle = 0;
         end
         
-        function T = globalTransform(lid)
-           if isempty(lid.robot)
-              T = lid.T;
+        function c = get.count(this) 
+           c = size(this.range,1); 
+        end
+        
+        function Tw = get.Tw(this)
+            if isempty(this.robot)
+              Tw = this.T;
            else
-              T = lid.robot.globalTransform * lid.T;
-           end
+              Tw = this.robot.T * this.T;
+            end
         end
         
-        function p = setRangeData(lid, range, timestamp)
-        %LIDAR.setRangeData Set new range data
+        function x = get.x(this)
+            x = pTransform([0;0], this.Tw);
+        end
+        
+        function attachToRobot(this, rob, x)
+            if ~isequal(size(x), [1 3])
+                error('x must be a 1x3 vector')
+            end
+            this.robot = rob;
+            this.T = se2(x(1), x(2), x(2));
+        end
+        
+%         function T = globalTransform(this)
+%            if isempty(this.robot)
+%               T = this.T;
+%            else
+%               T = this.robot.globalTransform * this.T;
+%            end
+%         end
+        
+        function newScan(this, range, angle)
+        %LIDAR.setScan Set new scan data
         %
-        % lid.setRangeData(R, T) sets new range data R with timestamp T        
-        %   R:  a vector with lid.data_lenght elements. Each element
-        %   represents a distance in m.
-        %   T:  acquisition time, expressed in seconds.
-        %
-            if length(range) ~= lid.data_length
-                error('Range lenght must be %d', lid.data_length);
-            end
-            if nargin < 3
-               timestamp = 0; 
-            end
-            lid.timestamp = double(timestamp);
-            lid.range = double(range);
-            lid.p = [lid.range .* lid.lupcos; lid.range .* lid.lupsin];
-            Tw = lid.globalTransform();
-            lid.pw = pTransform(lid.p, Tw);
-            lid.x = pTransform([0;0], Tw);
-            p = lid.p;
-%             if ~isempty(lid.robot)
-%                 rob = lid.robot;
-%                 T = se2(rob.x(1), rob.x(2), rob.x(3)) * se2(lid.x(1), lid.x(2), lid.x(3));
-%                 lid.p = pTransform(lid.p, T);
-%             end
-            
-        end
+        % lid.setRangeData(R, A) sets new range data R with timestamp T        
+        %   R:  a vector with range data, in m.
+        %   A:  a vector with angle data, in degrees.
         
-        
-        function h = plot(lid, hg)
-            if nargin < 2 ||  ~ishghandle(hg)
-            	hg = gcf;
+            if size(range,1) ~= size(angle,1)
+                error('range and angle musth have the same size');
             end
+            range(range == 0 | range > this.validRange(2)) = this.horizon;
+            this.range = double(range);
+            this.angle = double(angle);
+            this.p = [this.range .* cosd(this.angle); 
+                      this.range .* sind(this.angle)];
+            this.pw = pTransform(this.p, this.Tw());
             
-            h = findobj(hg, 'Tag', lid.plotTag);
-            
-            if isempty(h)
-                h = hgtransform();
-                set(h, 'Tag', lid.plotTag);
-                
-                hp = [];
-                %% LIDAR itslef
-%                 t = (1/16:1/8:1)'*2*pi;
-%                 x = sin(t) * 25 + lid.x(1);
-%                 y = cos(t) * 25 + lid.x(2);
-%                 hp = [hp fill(x,y,'r', 'EdgeColor', 'None')];
-                %%
-                
-                %hp = [hp line([0 lid.x(1)], [0 lid.x(2)], 'Color', 'r', 'LineWidth', 3)];
-                
-                for hh=hp
-                    set(hh, 'Parent', h);
-                end
-                %set(h, 'Matrix', lid.robot.T);
-            end
-        end
-        
-        function plot_range(lid, hg)                      
-            if nargin < 2 ||  ~ishghandle(hg)
-                hg = gcf;
-            end
+            %% Find points in dead angle (behind iwalker)
+            z = this.deadAngle/2;
+            this.inDeadAngle = (this.angle > 180-z) & (this.angle < 180+z);
 
-            p = lid.p;
-            if isempty(p)
-                return
+            %% Find points too near or too far (just for paint)
+            this.outRange = this.range < this.validRange(1) | this.range > this.validRange(2);
+ 
+            %% Find outliers
+            pd = pdist2next(this.p);
+            this.outliers = false(size(pd));
+            for i = 2:length(this.outliers)-1
+                this.outliers(i) = pd(i-1) > this.outlierDist && pd(i) > this.outlierDist;
             end
             
-            
-            
-            xr = lid.robot.x;
-            T = se2(xr(1), xr(2), xr(3));
-            p = T * [p; ones(1, size(p,2));];
-  
+            %% Find valid points
+            this.valid = ~this.inDeadAngle & ~this.outRange & ~this.outliers;
 
-   
-            h = findobj(hg, 'Tag', 'plot.Range');
-            
-            if isempty(h)
-                h = scatter(p(1,:), p(2,:), 1,'o', 'fill');
-                set(h, 'Tag', 'plot.Range');
-            else
-                x = p(1,:);
-                y = p(2,:);
-                set(h, 'XData', x, 'YData', y);
-            end
-            
-%             x = double(lid.range) .* lid.lupcos;
-%             y = double(lid.range) .* lid.lupsin;
-%             
-%             xx = [];
-%             yy = [];
-%             for i = 1:1:length(x)
-%                xx = [xx 0 x(i) NaN];
-%                yy = [yy 0 y(i) NaN];
-%             end
-%             
-% 
-%             
-%             if isempty(h)
-%                 h = hgtransform();
-%                 set(h, 'Tag', 'plot.Range');
-%                 hold on;
-%                 hp = [];
-%                 hp = [hp plot(x, y, '.')];
-%                 hp = [hp line(xx, yy, 'Color', [0 1 0.5], 'LineWidth', 0.01, 'LineStyle', '--')];
-%                 
-%                 for hh=hp
-%                     set(hh, 'Parent', h);
-%                 end
-%   
-%             else
-%                 set(h, 'XData', x, 'YData', y);
-%             end
         end
-              
-        
         
         
     end

@@ -72,10 +72,10 @@ classdef Plotter < handle
 %                 hp = [hp patch( xx, yy, color, 'EdgeColor', 'none')];
                 
                 %% wheels
-                xx = [-rx -rx rx  rx -rx];
-                yy = [-ry  ry ry -ry -ry];
-                hp = [hp patch( xx, yy + S/2, [0.2 0.2 0.2], 'EdgeColor', [0 0 0])];
-                hp = [hp patch( xx, yy - S/2, [0.2 0.2 0.2], 'EdgeColor', [0 0 0])];
+%                 xx = [-rx -rx rx  rx -rx];
+%                 yy = [-ry  ry ry -ry -ry];
+%                 hp = [hp patch( xx, yy + S/2, [0.2 0.2 0.2], 'EdgeColor', [0 0 0])];
+%                 hp = [hp patch( xx, yy - S/2, [0.2 0.2 0.2], 'EdgeColor', [0 0 0])];
                 
                 %% laser
 %                 theta=linspace(0,2*pi,10); %100 evenly spaced points between 0 and 2pi
@@ -106,7 +106,7 @@ classdef Plotter < handle
             end
             h = findobj(pl.ha, 'Tag', tag);
             if isempty(h)
-                h = plot(x(:,1), x(:,2), 'Color', color);
+                h = line(x(:,1), x(:,2), 'Color', color, 'LineWidth', 1);
                 set(h, 'Parent', pl.ha);
                 set(h, 'Tag', tag);
             else
@@ -114,8 +114,44 @@ classdef Plotter < handle
             end
         end
         
+        function plotSegmentedLines(pl, lines, tag)
+            if ~ishghandle(pl.ha)
+                pl.ha = Plotter.newAxes();
+            end
+            h = findobj(pl.ha, 'Tag', tag);
+            if ~isempty(h)
+                delete(h);
+            end
+            for obj = lines
+                X = [];
+                Y = [];
+                for i = 1:2:length(obj.ep)
+                    X = [X obj.ep(1,i), obj.ep(1,i+1), NaN];
+                    Y = [Y obj.ep(2,i), obj.ep(2,i+1), NaN];
+                end
+                h = line(X, Y, 'Color', 'r', 'LineWidth', 2);
+                set(h, 'Parent', pl.ha, 'tag', tag);
+%                 h = scatter(obj.ep(1,:), obj.ep(2,:), 'r');
+%                 set(h, 'Parent', pl.ha, 'tag', tag);
+%                 h = scatter(obj.ep(1,1), obj.ep(2,1), 'r^');
+%                 set(h, 'Parent', pl.ha, 'tag', tag);
+%                 h = scatter(obj.ep(1,end), obj.ep(2,end), 'b^');
+%                 set(h, 'Parent', pl.ha, 'tag', tag);
+                
+                % Line estimated
+                if strcmp(obj.orientation, 'horizontal');
+                    xx = [(X(1) - 15) (X(end-1) + 15)];
+                    yy = obj.m*xx + obj.c;
+                else
+                    yy = [(Y(1) - 15) (Y(end-1) + 15)];
+                    xx = obj.m*yy + obj.c;
+                end
+                 h = line(xx, yy, 'Color', 'y', 'LineStyle', '--',  'LineWidth', 0.05);
+                 set(h, 'Parent', pl.ha, 'tag', tag);
+            end
+        end
 
-        function plotLineSegments(pl, segments, tag)
+        function plotSegments(pl, segments, tag)
             if ~ishghandle(pl.ha)
                 pl.ha = Plotter.newAxes();
             end
@@ -125,25 +161,34 @@ classdef Plotter < handle
             end
             for obj = segments
                 % Line estimated
-                xx = [(obj.a(1) - 15) (obj.b(1) + 15)];
-                yy = obj.m*xx + obj.c;
-                h = line(xx, yy);
+                if strcmp(obj.orientation, 'horizontal');
+                    xx = [(obj.a(1) - 15) (obj.b(1) + 15)];
+                    yy = obj.m*xx + obj.c;
+                else
+                    yy = [(obj.a(2) - 15) (obj.b(2) + 15)];
+                    xx = obj.m*yy + obj.c;
+                end
+                h = line(xx, yy, 'Color', 'c', 'LineStyle', '--',  'LineWidth', 0.1);
                 set(h, 'Parent', pl.ha, 'tag', tag);
                 % Segment estimated
-                h = line([obj.a(1) obj.b(1)], [obj.a(2) obj.b(2)], 'Color', 'g', 'LineWidth', 4);
+                h = line([obj.a(1) obj.b(1)], [obj.a(2) obj.b(2)], 'Color', [1 0 1], 'LineWidth', 3);
                 set(h, 'Parent', pl.ha, 'tag', tag);
                 % Naive segment: endpoints
-                h = line([obj.X(1) obj.X(end)], [obj.Y(1) obj.Y(end)], 'Color', 'r', 'LineWidth', 1);
+%                 h = line([obj.p(1,1) obj.p(1,end)], [obj.p(2,1) obj.p(2,end)], 'Color', 'r', 'LineWidth', 1);
+%                 set(h, 'Parent', pl.ha, 'tag', tag);
+                % Hough
+                x = obj.rho * cosd(obj.theta);
+                y = obj.rho * sind(obj.theta);
+                h = line([0 x], [0 y], 'Color', 'b', 'LineStyle', '-.');
                 set(h, 'Parent', pl.ha, 'tag', tag);
-
             end
         end
         
-        function plotAnonymousLandmarks(pl, lans, tag, local)
+        function plotAnonymousLandmarks(pl, lans, tag, color, local)
             if ~ishghandle(pl.ha)
                 pl.ha = Plotter.newAxes();
             end
-            if nargin < 4
+            if nargin < 5
                local = false; 
             end
             h = findobj(pl.ha, 'Tag', tag);
@@ -152,8 +197,10 @@ classdef Plotter < handle
             end
             for lan = lans
             % Anonymous landmark
-                    c1 = [190 30 30]./255;
-                    c2 = [250 120 25]./255;
+%                     c1 = [190 30 30]./255;
+%                     c2 = [250 120 25]./255;
+                    c1 = color;
+                    c2= color ./ 1.2;
                     if local
                        lx = lan.posl(1);
                        ly = lan.posl(2);
@@ -316,20 +363,45 @@ classdef Plotter < handle
             end
         end
         
-        function plotPoints(pl, X, Y, tag, color, s)
+        function plotPoints(pl, X, Y, tag, color, s, marker)
             if ~ishghandle(pl.ha)
                 pl.ha = Plotter.newAxes();
             end
             
             h = findobj(pl.ha, 'Tag', tag);
             if isempty(h)
-                h = scatter(X, Y, s, color);
+                h = scatter(X, Y, s, color, marker);
                 set(h, 'Tag', tag);
                 set(h, 'Parent', pl.ha);
             else
-                set(h, 'XData', X, 'YData', Y, 'CData', color);
+                set(h, 'XData', X, 'YData', Y, 'CData', color, 'SizeData', s, 'Marker', marker);
             end
         end
+        
+        function plotRays(pl, xl, X, Y, tag, color, width, style) 
+            if ~ishghandle(pl.ha)
+                pl.ha = Plotter.newAxes();
+            end  
+            
+
+            Xr = [];
+            Yr = [];
+            for i = 1:length(X)
+               Xr = [Xr xl(1) X(i) NaN];
+               Yr = [Yr xl(2) Y(i) NaN];
+            end
+            
+            h = findobj(pl.ha, 'Tag', tag);
+            if isempty(h)
+                h = line(Xr, Yr, 'Color', color, 'LineStyle', style, 'LineWidth', width);
+                set(h, 'Tag', tag);
+                set(h, 'Parent', pl.ha);
+            else
+                set(h, 'XData', Xr, 'YData', Yr, 'Color', color, 'LineStyle', style, 'LineWidth', width);
+            end
+        end
+        
+        
         
         %cp : color points
         %ca : color area
@@ -351,7 +423,7 @@ classdef Plotter < handle
                 set(h, 'Tag', tag);
                 set(h, 'Parent', pl.ha);
             else
-                set(h,'XData',[X Xl], 'YData',[Y Yl]);
+                set(h,'XData',[X Xl], 'YData',[Y Yl], 'FaceColor', color);
             end
         end
         

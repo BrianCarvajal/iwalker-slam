@@ -32,7 +32,6 @@
 %   alphalim        steering wheel limit <- TODO: Remove?
 %   maxspeed        maximum vehicle speed
 %   T               sample interval
-%   verbose         verbosity
 %   x_hist          history of true vehicle state (Nx3)
 %   x0              initial state, restored on init()
 %
@@ -101,12 +100,14 @@ classdef DifferentialRobot < handle
     properties (SetAccess = private)
         lidar       % LIDAR object
     end
+    
+    
     properties (Dependent = true)
         T   %transform matrix
     end
     methods
         
-        function rob = DifferentialRobot(V, varargin)
+        function this = DifferentialRobot(V, varargin)
             %DifferentialRobot object constructor
             %
             % rob = DifferentialRobot(V_ACT, OPTIONS)  creates a DifferentialRobot object with actual odometry
@@ -143,49 +144,44 @@ classdef DifferentialRobot < handle
             %%Parse optionals arguments
             opt = tb_optparse(opt, varargin);
             
-            rob.x = zeros(3,1);
-            rob.V = V;
-            rob.dt = opt.dt;
-            rob.alphalim = (2*opt.vmax)/opt.S;
-            rob.maxwspeed = opt.vmax;
-            rob.S = opt.S;
-            rob.r = opt.r;
-            rob.x0 = opt.x0(:);
-            rob.rdim = opt.rdim;
-            rob.verbose = opt.verbose;
-            rob.w = [0 0];
+            this.x = zeros(3,1);
+            this.V = V;
+            this.dt = opt.dt;
+            this.alphalim = (2*opt.vmax)/opt.S;
+            this.maxwspeed = opt.vmax;
+            this.S = opt.S;
+            this.r = opt.r;
+            this.x0 = opt.x0(:);
+            this.rdim = opt.rdim;
+            this.verbose = opt.verbose;
+            this.w = [0 0];
             
-            rob.x_hist = [];
+            this.x_hist = [];
             
-            rob.plotTag = 'DifferentialRobot.plot';
+            this.plotTag = 'DifferentialRobot.plot';
         end
         
-        function T = get.T(rob)
-            T = transl([rob.x(1:2)' 0]) * trotz (rob.x(3));
+        function T = get.T(this)
+            T = se2(this.x(1), this.x(2), this.x(3)); 
         end
         
-        function T= globalTransform(rob)
-           T = se2(rob.x(1), rob.x(2), rob.x(3)); 
+        function T= globalTransform(this)
+           T = se2(this.x(1), this.x(2), this.x(3)); 
         end
         
-        function attachLidar(rob, lidar, x)
+        function attachLidar(this, lidar, x)
             %DifferentialRobot.attachLidar Set a LIDAR object
             %
-            % rob.attachLidar(L, X) sets the lidar pose X (x, y, alpha)
+            % rob.attachLidar(L, X) sets the lidar pose X (x, y, theta)
             % relative to robot pose
-            
-            if isempty(lidar) || (~isa(lidar, 'LIDAR') && ~isa(lidar, 'RPLIDAR'))
+            if isempty(lidar) || (~isa(lidar, 'LIDAR'))
                 error('lidar must be a LIDAR object');
             end
-            if ~isequal(size(x), [1 3])
-                error('x must be a 1x3 vector')
-            end
-            rob.lidar = lidar;
-            lidar.robot = rob;
-            lidar.T = se2(x(1), x(2), x(2));
+            this.lidar = lidar;
+            this.lidar.attachToRobot(this, x);
         end
         
-        function init(rob, x0)
+        function init(this, x0)
             %DifferentialRobot.init Reset state of vehicle object
             %
             % rob.init() sets the state rob.x := rob.x0, initializes the driver
@@ -193,19 +189,19 @@ classdef DifferentialRobot < handle
             %
             % rob.init(X0) as above but the state is initialized to X0.
             if nargin > 1
-                rob.x = x0(:);
+                this.x = x0(:);
             else
-                rob.x = rob.x0;
+                this.x = this.x0;
             end
-            rob.x_hist = [];
+            this.x_hist = [];
         end
         
-        function max = maxspeed(rob, angularSpeed)
+        function max = maxspeed(this, angularSpeed)
             %Computes the current maximum speed depending on the angular velocity
-            max = rob.maxwspeed - (angularSpeed * rob.S / 2);
+            max = this.maxwspeed - (angularSpeed * this.S / 2);
         end   
         
-        function xnext = f(rob, x, odo, w)
+        function xnext = f(this, x, odo, w)
             %DifferentialRobot.f Predict next state based on odometry
             %
             % XN = rob.f(X, ODO) predict next state XN (1x3) based on current state X (1x3) and
@@ -236,7 +232,7 @@ classdef DifferentialRobot < handle
             %xnext = rob.x';
         end
         
-        function odo = update(rob, u, w)
+        function odo = update(this, u, w)
             %DifferentialRobot.update Update the vehicle state
             %
             % ODO = rob.update(U) is the true odometry value for
@@ -248,30 +244,30 @@ classdef DifferentialRobot < handle
             % - Appends new state to state history property x_hist.
             % - Odometry is also saved as property odometry.
             if nargin < 3
-                rob.w(1) = (u(1) + (u(2)*rob.S/2)) / rob.r; % right wheel
-                rob.w(2) = (u(1) - (u(2)*rob.S/2)) / rob.r; % left wheel
+                this.w(1) = (u(1) + (u(2)*this.S/2)) / this.r; % right wheel
+                this.w(2) = (u(1) - (u(2)*this.S/2)) / this.r; % left wheel
             else
-                rob.w = w;
+                this.w = w;
             end
             
-            xp = rob.x; % previous state
-            rob.x(1) = xp(1) + u(1)*rob.dt*cos(xp(3));
-            rob.x(2) = xp(2) + u(1)*rob.dt*sin(xp(3));
-            rob.x(3) = xp(3) + u(2)*rob.dt;
+            xp = this.x; % previous state
+            this.x(1) = xp(1) + u(1)*this.dt*cos(xp(3));
+            this.x(2) = xp(2) + u(1)*this.dt*sin(xp(3));
+            this.x(3) = xp(3) + u(2)*this.dt;
             
-            odo = [colnorm(rob.x(1:2)-xp(1:2)) rob.x(3)-xp(3)];
+            odo = [colnorm(this.x(1:2)-xp(1:2)) this.x(3)-xp(3)];
             
             % If speed is negative, the odometry must be negative also
             if u(1) < 0
                 odo(1) = -odo(1);
             end
-            rob.odometry = odo;
+            this.odometry = odo;
             
-            rob.x_hist = [rob.x_hist; rob.x'];   % maintain history
-            rob.w_hist = [rob.w_hist; rob.w];
+            this.x_hist = [this.x_hist; this.x'];   % maintain history
+            this.w_hist = [this.w_hist; this.w];
         end
         
-        function odo = updateDifferential(rob, w)
+        function odo = updateDifferential(this, w)
             %DifferentialRobot.update Update the vehicle state
             %
             % ODO = rob.update(U) is the true odometry value for
@@ -290,13 +286,13 @@ classdef DifferentialRobot < handle
 %             speed = (vR + vL) / 2;
 %             steer = (vR - vL) / rob.S; 
 %             odo = rob.update([speed, steer], rph);
-            vL = w(1) * rob.r;
-            vR = w(2) * rob.r;
+            vL = w(1) * this.r;
+            vR = w(2) * this.r;
            
             speed = (vR + vL) / 2;
-            steer = (vR - vL) / rob.S;
+            steer = (vR - vL) / this.S;
             
-            odo = rob.update([speed steer], w);            
+            odo = this.update([speed steer], w);            
 %             dx = speed * cos(rob.x(3)) * rob.dt;
 %             dy = speed * sin(rob.x(3)) * rob.dt;
 %             dth = steer * rob.dt;
@@ -316,7 +312,7 @@ classdef DifferentialRobot < handle
 %             rob.x_hist = [rob.x_hist; rob.x'];   % maintain history
         end
         
-        function odo = updateOdometry(rob, odo)
+        function odo = updateOdometry(this, odo)
             %DifferentialRobot.updateOdometry Update the vehicle state
             %
             % ODO = rob.update(ODO) updates the robot state and mantain the
@@ -325,15 +321,15 @@ classdef DifferentialRobot < handle
             % Notes::
             % - Appends new state to state history property x_hist.
             % - Odometry is also saved as property odometry.
-            rob.x = rob.f(rob.x', odo)';          
-            rob.odometry = odo;
-            rob.w = [0 0];
-            rob.x_hist = [rob.x_hist; rob.x'];   % maintain history
-            rob.w_hist = [rob.w_hist; rob.w];
+            this.x = this.f(this.x', odo)';          
+            this.odometry = odo;
+            this.w = [0 0];
+            this.x_hist = [this.x_hist; this.x'];   % maintain history
+            this.w_hist = [this.w_hist; this.w];
         end
         
         
-        function J = Fx(rob, x, odo)
+        function J = Fx(this, x, odo)
             %DifferentialRobot.Fx  Jacobian df/dx
             %
             % J = V.Fx(X, ODO) is the Jacobian df/dx (3x3) at the state X, for
@@ -350,7 +346,7 @@ classdef DifferentialRobot < handle
                 ];
         end
         
-        function J = Fv(rob, x, odo)
+        function J = Fv(this, x, odo)
             %DifferentialRobot.Fv  Jacobian df/dv
             %
             % J = V.Fv(X, ODO) returns the Jacobian df/dv (3x2) at the state X, for
@@ -367,7 +363,7 @@ classdef DifferentialRobot < handle
                 ];
         end
         
-        function odo = step(rob, varargin)
+        function odo = step(this, varargin)
             %DifferentialRobot.step Advance one timestep
             %
             % ODO = rob.step(SPEED, STEER) updates the vehicle state for one timestep
@@ -384,19 +380,19 @@ classdef DifferentialRobot < handle
             % See also DifferentialRobot.control, DifferentialRobot.update
             
             % get the control input to the vehicle from either passed demand or driver
-            u = rob.control(varargin{:});
+            u = this.control(varargin{:});
             
             % compute the true odometry and update the state
-            odo = rob.update(u);
+            odo = this.update(u);
             
             % add noise to the odometry
-            if ~isempty(rob.V) && ~isequal(size(rob.V),[2 2])
-                odo = rob.odometry + randn(1,2)*rob.V;
+            if ~isempty(this.V) && ~isequal(size(this.V),[2 2])
+                odo = this.odometry + randn(1,2)*this.V;
             end
         end
         
         
-        function u = control(rob, speed, steer)
+        function u = control(this, speed, steer)
             %DifferentialRobot.control Compute the control input to vehicle
             %
             % U = rob.control(SPEED, STEER) returns a control input (speed,steer)
@@ -406,10 +402,10 @@ classdef DifferentialRobot < handle
             % See also DifferentialRobot.step
             
             % clip the steering angle
-            u(2) = max(-rob.alphalim, min(rob.alphalim, steer));
+            u(2) = max(-this.alphalim, min(this.alphalim, steer));
             
             % clip the speed
-            maxspeed = rob.maxspeed(u(2));
+            maxspeed = this.maxspeed(u(2));
             u(1) = min(maxspeed, max(-maxspeed, speed));
             
         end
@@ -417,7 +413,7 @@ classdef DifferentialRobot < handle
         
         % TODO run and run2 should become superclass methods...
         
-        function p = run2(rob, T, x0, speed, steer)
+        function p = run2(this, T, x0, speed, steer)
             %DifferentialRobot.run2 Run the vehicle simulation
             %
             % P = rob.run2(T, X0, SPEED, STEER) runs the vehicle model for a time T with
@@ -426,7 +422,7 @@ classdef DifferentialRobot < handle
             %
             %
             % See also DifferentialRobot.run, DifferentialRobot.step.
-            rob.init(x0);
+            this.init(x0);
             
 %             if nargout == 0
 %                 if ~isempty(rob.driver)
@@ -435,18 +431,18 @@ classdef DifferentialRobot < handle
 %                 rob.visualize();
 %             end
             
-            for i=1:(T/rob.dt)
-                rob.update([speed steer]);
+            for i=1:(T/this.dt)
+                this.update([speed steer]);
                 if nargout == 0
                     % if no output arguments then plot each step
-                    rob.plot();
+                    this.plot();
                     drawnow
                 end
             end
-            p = rob.x_hist;
+            p = this.x_hist;
         end
         
-        function h = plot(rob, hg, varargin)
+        function h = plot(this, hg, varargin)
             %DifferentialRobot.plot Plot vehicle
             %
             % rob.plot(OPTIONS) plots the vehicle on the current axes at a pose given by
@@ -474,11 +470,11 @@ classdef DifferentialRobot < handle
             end
             
             
-            h = findobj(hg, 'Tag', rob.plotTag);
+            h = findobj(hg, 'Tag', this.plotTag);
             if isempty(h)
                 % no instance of vehicle graphical object found
                 h = hgtransform();
-                set(h, 'Tag', rob.plotTag);  % tag it
+                set(h, 'Tag', this.plotTag);  % tag it
                 
                 
                 hold on;
@@ -490,18 +486,18 @@ classdef DifferentialRobot < handle
                 %% center of robot
                 %hp = [hp scatter(0, 0, 50, 'ro')];
                 %% wheels
-                rx = rob.r;
-                ry = rob.r/4;
+                rx = this.r;
+                ry = this.r/4;
                 xx = [-rx -rx rx rx -rx];
                 yy = [-ry ry ry -ry -ry];
                 
-                hp = [hp  line( xx, yy + rob.S/2)];
-                hp = [hp line( xx, yy - rob.S/2)];
+                hp = [hp  line( xx, yy + this.S/2)];
+                hp = [hp line( xx, yy - this.S/2)];
                 
                 %% frame
                 
-                xx = [ 0 rob.S 0 0 ];
-                yy = [ rob.S/2 0 -rob.S/2 rob.S/2];
+                xx = [ 0 this.S 0 0 ];
+                yy = [ this.S/2 0 -this.S/2 this.S/2];
                 hp = [hp line( xx, yy)];
                 
                 %% lidar
@@ -516,92 +512,8 @@ classdef DifferentialRobot < handle
                 end
             end
             
-            set(h, 'Matrix', transl([rob.x(1:2)' 0]) * trotz (rob.x(3)));
+            set(h, 'Matrix', transl([this.x(1:2)' 0]) * trotz (this.x(3)));
         end
-        
-        function plotTrace(rob, hg, varargin)
-            if nargin < 2 || ~ishghandle(hg)
-                hg = gcf;
-            end
-            xyt = rob.x_hist;
-            h = findobj(hg, 'Tag', 'rob.plotTrace');
-            if isempty(h)
-                h = plot(xyt(:,1), xyt(:,2), varargin{:});
-                set(h, 'Tag', 'rob.plotTrace');
-            else
-                set(h, 'XData', xyt(:,1), 'YData', xyt(:,2));
-            end
-        end
-        
-        function plot_xy(rob, varargin)
-            %DifferentialRobot.plot_xy Plots true path followed by vehicle
-            %
-            % rob.plot_xy() plots the true xy-plane path followed by the vehicle.
-            %
-            % V.plot_xy(LS) as above but the line style arguments LS are passed
-            % to plot.
-            %
-            % Notes::
-            % - The path is extracted from the x_hist property.
-            
-            xyt = rob.x_hist;
-            plot(xyt(:,1), xyt(:,2), varargin{:});
-            
-        end
-        
-        function visualize(rob)
-            grid on
-        end
-        
-        function verbosity(rob, v)
-            %DifferentialRobot.verbosity Set verbosity
-            %
-            % V.verbosity(A) set verbosity to A.  A=0 means silent.
-            rob.verbose = v;
-        end
-        
-        function display(rob)
-            %DifferentialRobot.display Display vehicle parameters and state
-            %
-            % rob.display() displays vehicle parameters and state in compact
-            % human readable form.
-            %
-            % Notes::
-            % - This method is invoked implicitly at the command line when the result
-            %   of an expression is a DifferentialRobot object and the command has no trailing
-            %   semicolon.
-            %
-            % See also DifferentialRobot.char.
-            
-            loose = strcmp( get(0, 'FormatSpacing'), 'loose');
-            if loose
-                disp(' ');
-            end
-            disp([inputname(1), ' = '])
-            disp( char(rob) );
-        end % display()
-        
-        function s = char(rob)
-            %DifferentialRobot.char Convert to a string
-            %
-            % s = V.char() is a string showing vehicle parameters and state in in
-            % a compact human readable format.
-            %
-            % See also DifferentialRobot.display.
-            
-            s = 'Differential wheeled robot object';
-            s = char(s, sprintf(...
-                '  S=%g, r=%g maxwspeed=%g, alphalim=%g, T=%f, nhist=%d', ...
-                rob.S, rob.r, rob.maxwspeed, rob.alphalim, rob.dt, ...
-                numrows(rob.x_hist)));
-            if ~isempty(rob.V)
-                s = char(s, sprintf(...
-                    '  V=(%g,%g)', ...
-                    rob.V(1,1), rob.V(2,2)));
-            end
-            s = char(s, sprintf('  x=%g, y=%g, theta=%g', rob.x));
-        end
-        
     end % method
     
 end % classdef

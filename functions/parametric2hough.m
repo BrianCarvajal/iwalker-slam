@@ -7,14 +7,21 @@ function [ rho, theta ] = parametric2hough( m, c, isHorizontal)
     if nargin < 3
         isHorizontal = true;
     end
+%     if isHorizontal
+%         theta =atan2(-c, c*m)+2*pi; %atan((-1)/m);
+%         rho = c * sin(theta);
+%     else
+%         theta = atan2(c*m, -c)+2*pi;%atan(-m);
+%         rho = c * cos(theta);
+%     end
     if isHorizontal
-        theta =atan2(-c, c*m)+2*pi; %atan((-1)/m);
-        rho = c * sin(theta);
+        theta = atand(m)+90; %atan((-1)/m);
+        rho = c * sind(theta);
     else
-        theta = atan2(c*m, -c)+2*pi;%atan(-m);
-        rho = c * cos(theta);
+        theta = atand(1/m)+90;
+        rho = c * cosd(theta);
     end
-    %theta = wrapTo2Pi(theta);
+    theta = wrapTo360(theta);
 end
 
 

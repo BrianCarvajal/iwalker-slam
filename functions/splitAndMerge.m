@@ -12,6 +12,9 @@ function [FL, V] = splitAndMerge( p, threshold, maxOutliers)
     if nargout == 2
        V = []; 
     end
+    if threshold <= 0
+        error('splitAndMerge::Threshold must be greater than zero')
+    end
     N = size(p, 2);
     FL = [];
     if N < 2 
@@ -29,9 +32,9 @@ function [FL, V] = splitAndMerge( p, threshold, maxOutliers)
         n = s(2) - s(1) + 1; % set size
         
 %%2.5 If set's size is less than 3 we descart the set 
-%         if n < 3
-%            continue; 
-%         end
+        if n < 3
+           continue; 
+        end
         q1 = p(:, s(1));
         q2 = p(:, s(2));
 %%3 Detect point P with maximum distance dP to the line
@@ -60,11 +63,15 @@ function [FL, V] = splitAndMerge( p, threshold, maxOutliers)
 %%5 Otherwise, split si at P into si1 and si2, replace si in L by si1 and si2, continue (go to 2)
         if do_split
             peak = s(1) + peak - 1;
-            s1 = [s(1); peak];
-            s2 = [peak; s(2)];
-            L = [s1 s2 L];
-            if nargout == 2
-               V = [V peak]; 
+            if peak == s(1) || peak == s(2)
+                FL = [FL s];
+            else
+                s1 = [s(1); peak];
+                s2 = [peak; s(2)];
+                L = [s1 s2 L];
+                if nargout == 2
+                   V = [V peak]; 
+                end
             end
         end
     end

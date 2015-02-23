@@ -18,19 +18,20 @@
 classdef Landmark < handle
     
     properties
-        pos     % x and y position in wolrd frame
-        posl    % x and y position in local frame
-        ang     % In range [-180 180]. Positive angles are concave and negative convex
-        ori     %
-        u1      % unitary vector 1
-        u2      % unitary vector 2
-        prev    % previous connected landmark
-        next    % next connected landmark
-        times_updated = 0   % times seen before
-        id = -1             % unique id
+        pos         % x and y position in wolrd frame
+        posl        % x and y position in local frame
+        V           % covariance matrix
+        type        % type
+        remarks     % times seen before
+        id          % unique id
         hist_pos
         matched_landmark %if the landarmk is anonymous and match some know ,
                          % stores a reference to that landmark
+    end
+    
+    properties (Constant)
+        %% Enumerations (native enumerations matlab's are crap)
+        TYPE = struct('Corner', 1, 'Oclusor', 2, 'Virtual', 3);
     end
     
     properties (Dependent = true)
@@ -38,21 +39,13 @@ classdef Landmark < handle
     end
     
     methods
-        function obj = Landmark(pos, posl, ang, ori, u1, u2)
+        function obj = Landmark(pos, type)
             %Landmark object constructor
-            %
-            %   L = Landmark(P, A, O, U1, U2) is an object representing a
-            %   vertice landmark at position P, angle A and orientation O.
-            %   U1 and U2 are the unitary vectors
-            
+            %           
             obj.pos = pos;
-            obj.posl = posl;
-            obj.ang = ang;
-            obj.ori = ori;
-            obj.u1 = u1;
-            obj.u2 = u2;
-            obj.prev = [];
-            obj.next = [];
+            obj.posl = pos;
+            obj.type = type;
+            obj.V = [0 0; 0 0];
             obj.matched_landmark = [];
         end
         
@@ -87,16 +80,11 @@ classdef Landmark < handle
             % Z = L.h(XV) is the observation (1x2), range and bearing, from
             % robot at pose XV (1x3) to the current landmark
             %
-            % Z = L.h() as above but take the robot pose from L.robot.
-            %
             % Notes::
             % - Supports vectorized operation where XV (Nx3) and Z (Nx2).
             %
             % See also Landmark.Hx, Landmark.Hw, Landmark.Hxf.
             
-            if nargin < 2
-                xv = lan.robot.x;
-            end
             dx = lan.x - xv(:,1);
             dy = lan.y - xv(:,2);
             z = [sqrt(dx.^2 + dy.^2) atan2(dy, dx)-xv(:,3) ];   % range & bearing measurement
@@ -108,13 +96,9 @@ classdef Landmark < handle
             % J = L.Hx(XV) returns the Jacobian dh/dxv (2x3) at the vehicle
             % state XV (3x1) for the current landmark.
             %
-            % J = L.Hx() as above but take the robot pose from L.robot.
             %
             % See also Landmark.h.
             
-            if nargin < 2
-                xv = lan.robot.x;
-            end
             Delta = lan.pos - xv(1:2)';
             r = norm(Delta);
             J = [
@@ -137,13 +121,8 @@ classdef Landmark < handle
             % J = L.Hxf(XV) is the Jacobian dh/dxv (2x2) at the vehicle
             % state XV (3x1) for the current landmark
             %
-            % J = L.Hxf()  as above but take the robot pose from L.robot.
-            %
             % See also Landmark.h.
             
-            if nargin < 2
-                xv = lan.robot.x;
-            end
             Delta = lan.pos - xv(1:2)';
             r = norm(Delta);
             J = [
@@ -195,19 +174,7 @@ classdef Landmark < handle
         end
         
         function s = sameness(l1, l2)
-            
-            k1 = 1.0;
-            k2 = 0.0;
-            ed = sqrt( (l1.x - l2.x)^2 + (l1.y - l2.y)^2 );
-            ad = abs(sinh(l1.ori - l2.ori));
-            s = (k1 * ed + k2 * ad);
-            
-            
-            %s = zeros(size(features, 1), 'double');
-            %ed = pdist2([lan.x, feature.x], [lan.y, feature.y]);
-            %ad = abs(sinh(lan.ori - feature.ori));
-            %s =  5 * ed + 1/5 * ad;
-            %s = 2*(abs(lan.x - [features.x]) + abs(lan.y - [features.y])) + abs(lan.ang - [features.ang]);
+            s = sqrt( (l1.x - l2.x)^2 + (l1.y - l2.y)^2 );
         end
         
         function [v,i] = best_match(lan, landmarks)
@@ -221,44 +188,44 @@ classdef Landmark < handle
         
         
         
-        function plot(lans, argv)
-            if nargin < 2
-                argv = 'r';
-            end
-            hold on;
-            
-            hg = gcf;   
-            
-            for lan = lans
-                u1 = lan.u1 * 0.1;
-                u2 = lan.u2 * 0.1;
-                X = [lan.x + u1(1), lan.x, lan.x + u2(1)];
-                Y = [lan.y + u1(2), lan.y, lan.y + u2(2)];
-                if lan.isConvex()
-                    color = 'c';
-                else
-                    color = 'y';
-                end
-                
-                tag = ['Landmark_', num2str(lan.id)];
-                h = findobj(hg, 'Tag', tag);
-                if isempty(h)
-                    h = line(X, Y, 'Color', color, 'LineWidth', 5);
-                    %text(lan.x , lan.y, int2str(lan.id), 'FontSize', 20, 'Color', 'r');
-                    set(h, 'Tag', tag);
-                    set(h, 'UserData', lan);
-                else
-                    set(h, 'XData', X, 'YData', Y, 'Color', color);
-                end
-
-            end
-            
-        end
-        
-        function plot_hist(lan, argv)
-            h = lan.hist_pos;
-            plot(h(:,1), h(:,2), 'o-r');
-        end
+%         function plot(lans, argv)
+%             if nargin < 2
+%                 argv = 'r';
+%             end
+%             hold on;
+%             
+%             hg = gcf;   
+%             
+%             for lan = lans
+%                 u1 = lan.u1 * 0.1;
+%                 u2 = lan.u2 * 0.1;
+%                 X = [lan.x + u1(1), lan.x, lan.x + u2(1)];
+%                 Y = [lan.y + u1(2), lan.y, lan.y + u2(2)];
+%                 if lan.isConvex()
+%                     color = 'c';
+%                 else
+%                     color = 'y';
+%                 end
+%                 
+%                 tag = ['Landmark_', num2str(lan.id)];
+%                 h = findobj(hg, 'Tag', tag);
+%                 if isempty(h)
+%                     h = line(X, Y, 'Color', color, 'LineWidth', 5);
+%                     %text(lan.x , lan.y, int2str(lan.id), 'FontSize', 20, 'Color', 'r');
+%                     set(h, 'Tag', tag);
+%                     set(h, 'UserData', lan);
+%                 else
+%                     set(h, 'XData', X, 'YData', Y, 'Color', color);
+%                 end
+% 
+%             end
+%             
+%         end
+%         
+%         function plot_hist(lan, argv)
+%             h = lan.hist_pos;
+%             plot(h(:,1), h(:,2), 'o-r');
+%         end
     end
     
 end

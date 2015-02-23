@@ -34,8 +34,9 @@ classdef GridMap < handle
         locc
     end
     
+    
     methods
-        function gm = GridMap(res, xlim, ylim)
+        function this = GridMap(res, xlim, ylim)
             if nargin < 3
                xlim = [-50 50];
                ylim = [-50 50]; 
@@ -50,30 +51,32 @@ classdef GridMap < handle
                 error('resolution must be less than size');
             end
             
-            
-           
-            gm.R = imref2d([m,n], xlim, ylim);
-            [oi, oj] = gm.R.worldToSubscript(0, 0);
-            gm.origin = [oi oj];
-            gm.sizeMap = [m n];
-            gm.resMap = res;
-            gm.map = ones(m, n)*0.5;
-            
-            gm.pfree = 0.75;
-            gm.pocc = 1 - gm.pfree;
-            gm.lfree = logit(gm.pfree);
-            gm.locc = logit(gm.pocc);
-            
+            this.R = imref2d([m,n], xlim, ylim);
+            [oi, oj] = this.R.worldToSubscript(0, 0);
+            this.origin = [oi oj];
+            this.sizeMap = [m n];
+            this.resMap = res;
+            this.map = ones(m, n, 'single')*0.5;
+            this.setPlfree(0.75);            
         end
         
-        function [i, j] = getIndex(gm, p)
-            if ~ gm.isInsideMap(p)
+        function setPlfree(this, p)
+            if p >= 0 && p <= 1
+                this.pfree = p;
+                this.pocc = 1 - this.pfree;
+                this.lfree = logit(this.pfree);
+                this.locc = logit(this.pocc);
+            end
+        end
+        
+        function [i, j] = getIndex(this, p)
+            if ~ this.isInsideMap(p)
                 error('Point outside the map');
             end
             
-            x = round(p./gm.resMap);% + gm.origin;           
-            i =  x(2) + gm.origin(1);
-            j =  x(1) + gm.origin(2);
+            x = round(p./this.resMap);% + gm.origin;           
+            i =  x(2) + this.origin(1);
+            j =  x(1) + this.origin(2);
             
             
             if nargout < 2
@@ -81,11 +84,11 @@ classdef GridMap < handle
             end
         end
         
-        function b = isInsideMap(gm, p)
-            b = p(1) > -gm.sizeMap(1)/2 && ...
-                p(1) <  gm.sizeMap(1)/2 && ...
-                p(2) > -gm.sizeMap(2)/2 && ...
-                p(2) <  gm.sizeMap(2)/2;
+        function b = isInsideMap(this, p)
+            b = p(1) > -this.sizeMap(1)/2 && ...
+                p(1) <  this.sizeMap(1)/2 && ...
+                p(2) > -this.sizeMap(2)/2 && ...
+                p(2) <  this.sizeMap(2)/2;
         end
         
         function resizeMap(gm, p)
@@ -119,23 +122,23 @@ classdef GridMap < handle
             gm.map(i,j) = 0.0001;
         end
         
-        function setBeam(gm, s, z, intercept)
+        function setBeam(this, s, z, intercept)
             try 
-                [si, sj] = gm.getIndex(s);
-                [zi, zj] = gm.getIndex(z);
+                [si, sj] = this.getIndex(s);
+                [zi, zj] = this.getIndex(z);
                 %[si, sj] = gm.R.worldToSubscript(s(1), s(2));
                 %[zi, zj] = gm.R.worldToSubscript(z(1), z(2));
                 [I,J] = GridMap.rasterizeLine(si,sj,zi,zj);
-                ind = sub2ind(size(gm.map), I, J);
+                ind = sub2ind(size(this.map), I, J);
 
                 %           Vectorized code
                 % We subtract 0.5 at read and add 0.5 at writeto the value of
                 % the cells because 0.5 is the most common value and we are
                 % using a sparse matrix for storage, where the zero values 
                 % are omited.
-                gm.map(ind(1:end-1)) = GridMap.updateCell(gm.map(ind(1:end-1)), gm.lfree);
-                llast = intercept * gm.locc + ~intercept * gm.lfree;
-                gm.map(ind(end)) = GridMap.updateCell(gm.map(ind(end)), llast);
+                this.map(ind(1:end-1)) = GridMap.updateCell(this.map(ind(1:end-1)), this.lfree);
+                llast = intercept * this.locc + ~intercept * this.lfree;
+                this.map(ind(end)) = GridMap.updateCell(this.map(ind(end)), llast);
 
                 %           Straightforward code
                 %             for k = 1 : length(ind) - 1
@@ -164,16 +167,20 @@ classdef GridMap < handle
             % a beam and max sets where we consider the beam intersects an
             % obstacle or not.
 
-        function update(gm, xs, p, range, rlim)
-            for i = 1:length(p)
-                if range(i) > rlim(1)
-                    gm.setBeam(xs', p(:,i)', range(i) < rlim(2));
-                end
-            end 
+        function update(this, xs, p, range, rlim)
+            valid = find(range < rlim(2));
+            for i = valid
+                this.setBeam(xs', p(:,i)', range(i) < rlim(2));
+            end
+%             for i = 1:length(p)
+%                 if range(i) > rlim(1)
+%                     gm.setBeam(xs', p(:,i)', range(i) < rlim(2));
+%                 end
+%             end 
         end
         
-        function img = image(gm)
-            img = gm.map;
+        function img = image(this)
+            img = this.map;
             
 %             ind = nonzeros(gm.map);
 %             if ~isempty(ind)

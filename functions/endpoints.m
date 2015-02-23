@@ -1,4 +1,4 @@
-function EP = endpoints( p, maxDist, maxRel )
+function EP = endpoints( p, maxDist )
     if isempty(p)
         EP = [];
         return;
@@ -8,22 +8,11 @@ function EP = endpoints( p, maxDist, maxRel )
     EP = zeros(n);
     EP(1) = 1;
     j = 2;
-    for i = 2 : n - 1
+    for i = 1 : n - 1
         if dist(i) > maxDist
             EP(j) = i;
             EP(j+1) = i+1;
             j = j+2;
-%         else
-%             if dist(i-1) < dist(i)
-%                 rel = dist(i-1) / dist(i);
-%             else
-%                 rel = dist(i) / dist(i-1);
-%             end
-%             if rel < maxRel
-%                 EP(j) = i;
-%                 EP(j+1) = i+1;
-%                 j = j+2;
-%             end
         end
     end
     EP(j) = n;
