@@ -309,6 +309,7 @@ classdef (Sealed) iWalkerSLAM < handle
                     set(this.toolbar.loadLog, 'enable', 'on');
                     set(this.toolbar.zoomIn, 'enable', 'on');
                     
+                    
                 case this.STATUS.LOG_RUNNING
                     set(this.info.status, ...
                         'string', 'Running', ...
@@ -348,7 +349,7 @@ classdef (Sealed) iWalkerSLAM < handle
                     set(this.toolbar.mode, 'enable', 'on');
                     set(this.toolbar.settings, 'enable', 'on');
                     set(this.toolbar.simulink, 'enable', 'on');
-                    
+                    set(this.toolbar.saveLogButton, 'enable', 'on');
                     
                 case this.STATUS.IWK_RUNNING
                     set(this.info.status, ...
@@ -421,7 +422,7 @@ classdef (Sealed) iWalkerSLAM < handle
                 %% Open and set model
                 modelName = this.settings.values.Simulink_model;
                 
-                load_system(modelName); % change for load_system for not open the model window
+                open_system(modelName); % change for load_system for not open the model window
                 
                 % When the model starts, call the localAddEventListener function
                 set_param(modelName,'StartFcn','gui.localAddEventListener');
@@ -570,9 +571,9 @@ classdef (Sealed) iWalkerSLAM < handle
         end
         
         function hokuyoEventListener(this, rtb, ~)
-            range = double(rtb.OutputPort(1).Data')/1000;
+            range = double(rtb.OutputPort(1).Data)/1000;
             angle = ((0.3515625 *((1:682) - 1)) - 120);
-            this.sim.stepScan(range', angle');
+            this.sim.stepScan(range', angle);
             this.redrawScan = true;
         end
         

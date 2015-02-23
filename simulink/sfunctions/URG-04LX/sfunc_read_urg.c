@@ -17,16 +17,20 @@ DCB dcb;
 int actLogURG = 0;
 int numURG = 0;
 
-unsigned char buf[3000]; // era 1456 pero por si acaso el laser devuelve mas informacion
+unsigned char buf[2000]; // era 1456 pero por si acaso el laser devuelve mas informacion
 int act_urg = 0;
 int res[682];
 int verbose = 0;
 bool isFIFOURGcreated;
 
-void openURG(unsigned char COMnumber){   
+void openURG(unsigned char COMnumber){
     char portString[20];
     if (verbose) printf("URG: call openURG()\n");
     sprintf(portString,"\\\\.\\COM%d",COMnumber);
+    if (verbose) {
+        printf(portString);
+        printf("\n");
+    }
     hCom= CreateFile(portString, GENERIC_READ | GENERIC_WRITE, 0 , NULL, OPEN_EXISTING, 0, NULL);
     
     ZeroMemory(&dcb, sizeof(dcb));
@@ -49,19 +53,15 @@ void openURG(unsigned char COMnumber){
     if (verbose) printf("URG: return openURG()\n");
 }
 
-int readURG(unsigned char *buf, int size) {   
+int readURG(unsigned char *buf, int size) {
     unsigned long aux=size;
     if (verbose) printf("URG: call readURG()\n");
-    if (ReadFile(hCom,
-            buf,
-            size,
-            &aux,
-            NULL) == 0)
+    if (ReadFile(hCom,buf,size,&aux,NULL) == 0)
     {
-        if (verbose) printf("URG: ReadFile() Ok\n");
+        if (verbose) printf("URG: ReadFile() failed\n");
         return 0;
     } else {
-        if (verbose) printf("URG: ERROR in ReadFile()\n");
+        if (verbose) printf("URG: OK in ReadFile()\n");
     }
     if (aux > 0)
     {
@@ -71,12 +71,12 @@ int readURG(unsigned char *buf, int size) {
     return (int)0-aux;
 }
 
-int urg_start_single_scan(void) {  
+int urg_start_single_scan(void) {
     DWORD dwBytesWritten = 0;
     int res = 0;
     char msg[256];
     if (verbose) printf("URG: call urg_start_single_scan()\n");
-    sprintf(msg,"MS0044072500001\r\n");
+    sprintf(msg,"MS0044072500001\n");
     
     if (verbose) printf("URG: Sending text: %s\n", msg);
     if(!WriteFile(hCom, msg, strlen(msg), &dwBytesWritten, NULL))
@@ -85,7 +85,7 @@ int urg_start_single_scan(void) {
     }
     else
     {
-       if (verbose) printf( "URG: %d bytes written\n", dwBytesWritten);
+        if (verbose) printf( "URG: %d bytes written\n", dwBytesWritten);
     }
     if (verbose) printf("URG: return urg_start_single_scan()\n");
     return dwBytesWritten;
@@ -97,34 +97,49 @@ void closeURG(){
     if (verbose) printf("URG: return closeURG()\n");
 }
 
-short char_decode(const unsigned char data[], int data_byte) {  
+short char_decode(const unsigned char data[], int data_byte) {
+    
     short value = 0;
-    int i;    
+    int i;
+    
     for (i = 0; i < data_byte; ++i) {
         value <<= 6;
         value &= ~0x3f;
         value |= data[i] - 0x30;
-    }    
+    }
+    
     return value;
 }
 
 
-void urg_decode(unsigned char *buf, int *res) {   
-    int i = 0;
-    int j = 0;
-    char data[2];   
-    // 2 LF seguidos marcan el final de los datos
-    while (!(isLF(buf[i+1]) && isLF(buf[i+2]))) {
-        //Leemos los bytes de 2 en 2. Si el segundo byte es LF es fin de
-        //linea de 64 bytes + byte de suma + byte LF
-        if (verbose) printf("[%c%c]",buf[i], buf[i+1]);
-        if (!isLF(buf[i+1])) {
-            data[0] = buf[i];
-            data[1] = buf[i+1];
+void urg_decode(unsigned char *buf, int *res) {
+    
+    int k;
+    int i,idx,j=0;
+    char data[2];
+    char startIdx=47;  // era 26
+    
+    for (k=0; k<21; k++) {
+        
+        idx = startIdx + k*66;
+        
+        for (i=0;i<64;i+=2) {
+            
+            data[0]=buf[idx + i];
+            data[1]=buf[idx + i+1];
             res[j] = char_decode(data, 2);
             j++;
         }
-        i+=2;
+    }
+    
+    idx = startIdx + 21*66;
+    
+    for (i=0;i<20;i+=2) {
+        
+        data[0]=buf[idx + i];
+        data[1]=buf[idx + i +1];
+        res[j] = char_decode(data, 2);
+        j++;
     }
 }
 
@@ -148,7 +163,7 @@ static void mdlInitializeSizes(SimStruct *S) {
         /* Return if number of expected != number of actual parameters */
         return;
     }
-  //  printf("URG: 111\n");
+    //  printf("URG: 111\n");
     ssSetNumContStates(S, 0);
     ssSetNumDiscStates(S, 0);
     
@@ -183,7 +198,7 @@ static void mdlInitializeSizes(SimStruct *S) {
 static void mdlInitializeSampleTimes(SimStruct *S) {
     mxArray *array_ptr;
     double sampleTime;
-    printf("URG: 2222\n");
+    // printf("URG: 2222\n");
     // Leemos el sample time definido por el usuario
     array_ptr = mexGetVariable("caller", "SampleTime");
     if (array_ptr == NULL ){
@@ -246,13 +261,13 @@ static void mdlStart(SimStruct *S) {
         } else {
             printf("URG: Verbose desactivado\n");
         }
-    }   
+    }
     /* Destroy array */
-    mxDestroyArray(array_ptr);        
+    mxDestroyArray(array_ptr);
     memset(buf, 0, sizeof(buf));
-    memset(res, 0, sizeof(res));    
-    openURG(COM);   
-    //urg_start_single_scan();
+    memset(res, 0, sizeof(res));
+    openURG(COM);
+    urg_start_single_scan();
     if (verbose) printf("URG: return mdlStart()\n");
 }
 #endif /*  MDL_START */
@@ -277,67 +292,72 @@ union {
 
 static void mdlOutputs(SimStruct *S, int_T tid) {
     uint16_T *y = ssGetOutputPortSignal(S,0);
-    unsigned char c; // catacter leido del laser
-    int act = 0; // indice actual del buffer
-    int i;
-    int lenLine = 0;
-    int startData = 0;
-    //if (verbose) printf("asignacion: %d\n",n = readURG(&car, sizeof(car)));
-    if (verbose) printf("URG: \n\n=====================================\n");
-    if (verbose) printf("URG: Lectura de laser: \n");
-    if (verbose) printf("URG: Leyendo cabecera...\n");
-
-    // Leemos los datos disponibles y pedimos una nueva lectura
-    n = readURG(buf, sizeof(buf));
+    int act;
+    char car;
+    
+    //printf("asignacion: %d\n",n = readURG(&car, sizeof(car)));
+    printf("lectura de laser: \n");
+    act = 0;
+    while((readURG(&car, sizeof(car)))==1) {
+        
+        buf[act] = car;
+        act++;
+        printf("%c",car);
+        if ((act>1) && ((buf[act-1] == '\r') || (buf[act-1] == '\n')) && ((buf[act-2] == '\r') || (buf[act-2] == '\n'))) {
+            
+//            if (act==1435) {
+            if (act>1000) {
+                
+                buf[act] = '\0';
+                
+                memset(res, 0, sizeof(res));
+                urg_decode(buf,res);
+                
+                memset(aux, 0, sizeof(aux));
+                j=0;
+                for (i=0; i<682; i++) {
+                    
+                    biconvert.val = res[i];
+                    
+                    aux[j++] = biconvert.bytes[0];
+                    aux[j++] = biconvert.bytes[1];
+                    aux[j++] = biconvert.bytes[2];
+                    aux[j++] = biconvert.bytes[3];
+                }
+                
+                biconvert.val = time;
+                
+                aux[j++] = biconvert.bytes[0];
+                aux[j++] = biconvert.bytes[1];
+                aux[j++] = biconvert.bytes[2];
+                aux[j++] = biconvert.bytes[3];
+                
+                act=0;
+                memset(buf, 0, sizeof(buf));
+                break;
+            }
+            
+            if (act>15)  {
+                
+                printf("\npeticion Nueva Captura Laser\n");
+            }
+            
+        }
+        
+    }
+   
+    printf("\nfin lectura laser\n");
+    
+    for (i=0; i<682; i++) y[i] = res[i];
+    
+    printf("copia realizada en Output laser\n");
     urg_start_single_scan();
-    if (verbose) printf("URG: %d bytes leidos\n", n);
-//     for (i = 0; i < n; i++) {
-//         if (verbose) printf("%c",buf[i]);
-//     }
+    /*   if (act_urg<SAMPLES_URG) {
+    //    timesUrg[act_urg] = timestamp.tv_sec*1000000 + timestamp.tv_usec;
+        act_urg++;
+    }*/
     
-    i = 0;
-    while (i < n && lenLine < 64) {
-        //Si encontramos LF es nueva linea
-        if (isLF(buf[i])) {
-            lenLine = 0;
-            startData = i+1;
-        } else {
-            lenLine++;
-        }
-        i++;
-    }
     
-    if (lenLine >= 64) {
-        if (verbose) printf("URG: Datos leidos, decodificando...\n");
-        //buf[act] = '\0';
-        memset(res, 0, sizeof(res));
-        urg_decode(&(buf[startData]), res);
-        memset(aux, 0, sizeof(aux));
-
-        if (verbose) printf("URG: Convirtiendo a Integer...\n");
-        j=0;
-        for (i=0; i<682; i++) {
-            biconvert.val = res[i];
-            aux[j++] = biconvert.bytes[0];
-            aux[j++] = biconvert.bytes[1];
-            aux[j++] = biconvert.bytes[2];
-            aux[j++] = biconvert.bytes[3];
-        }
-        biconvert.val = time;
-        aux[j++] = biconvert.bytes[0];
-        aux[j++] = biconvert.bytes[1];
-        aux[j++] = biconvert.bytes[2];
-        aux[j++] = biconvert.bytes[3];
-        
-        memset(buf, 0, sizeof(buf));
-        if (verbose) printf("URG: Fin lectura laser\n");
-        
-        for (i=0; i<682; i++) y[i] = res[i];
-        if (verbose) printf("URG: copia realizada en Output laser\n");
-    }
-    else {
-        if (verbose) printf("URG: Datos no disponibles\n");
-    }      
 }
 
 /* Function: mdlTerminate =====================================================

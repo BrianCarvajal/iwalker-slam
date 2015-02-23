@@ -180,7 +180,7 @@ unsigned int i=0;
         message.id=id;
         message.timestamp=0;
         message.flags=0;
-        message.len=3;
+        message.len=dlc;
        
         for (i=0;i<dlc;i++)
             message.data[i]=(unsigned char)(U(2+i));
