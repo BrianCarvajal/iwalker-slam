@@ -294,7 +294,7 @@ static void mdlOutputs(SimStruct *S, int_T tid) {
     uint16_T *y = ssGetOutputPortSignal(S,0);
     int act;
     char car;
-    
+    int negative;
     //printf("asignacion: %d\n",n = readURG(&car, sizeof(car)));
     //printf("lectura de laser: \n");
     act = 0;
@@ -302,10 +302,9 @@ static void mdlOutputs(SimStruct *S, int_T tid) {
         
         buf[act] = car;
         act++;
-       // printf("%c",car);
+        // printf("%c",car);
         if ((act>1) && ((buf[act-1] == '\r') || (buf[act-1] == '\n')) && ((buf[act-2] == '\r') || (buf[act-2] == '\n'))) {
             
-//            if (act==1435) {
             if (act>1000) {
                 
                 buf[act] = '\0';
@@ -336,26 +335,28 @@ static void mdlOutputs(SimStruct *S, int_T tid) {
                 memset(buf, 0, sizeof(buf));
                 break;
             }
-            
-            if (act>15)  {
-                
-     //           printf("\npeticion Nueva Captura Laser\n");
-            }
-            
         }
-        
     }
-   
-   // printf("\nfin lectura laser\n");
-    
-    for (i=0; i<682; i++) y[i] = res[i];
-    
- //   printf("copia realizada en Output laser\n");
     urg_start_single_scan();
-    /*   if (act_urg<SAMPLES_URG) {
-    //    timesUrg[act_urg] = timestamp.tv_sec*1000000 + timestamp.tv_usec;
-        act_urg++;
-    }*/
+    negative = 0;
+    for (i=0; i<682; i++)
+    {
+        if (res[i] < 0)
+        {
+            negative = 1;
+            break;
+        }
+        else 
+        {
+            y[i] = res[i];
+        }
+    }
+    // Si hay algun negativo son datos invaldiso: devolvemos todo 0
+    if (negative == 1)
+    {
+        for (i=0; i<682; i++) y[i] = 0;
+    }
+    
     
     
 }

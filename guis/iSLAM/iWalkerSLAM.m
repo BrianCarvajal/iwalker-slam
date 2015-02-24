@@ -415,10 +415,36 @@ classdef (Sealed) iWalkerSLAM < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %% Simulink Management
         
-        function initModel(this)
-            this.setStatus(this.STATUS.BUSY);
-            set(this.fig, 'Pointer','watch');
-            try
+%         function initModel(this)
+%             this.setStatus(this.STATUS.BUSY);
+%             set(this.fig, 'Pointer','watch');
+%             try
+%                 %% Open and set model
+%                 modelName = this.settings.values.Simulink_model;
+%                 
+%                 load_system(modelName); % change for load_system for not open the model window
+%                 
+%                 % When the model starts, call the localAddEventListener function
+%                 set_param(modelName,'StartFcn','gui.localAddEventListener');
+%                 
+%                 % Simulink may optimise your model by integrating all your blocks. To
+%                 % prevent this, you need to disable the Block Reduction in the Optimisation
+%                 % settings.
+%                 set_param(modelName,'BlockReduction','off');
+%                 this.setStatus(this.STATUS.IWK_READY);
+%             catch
+%                 errordlg('Problem loading simulink model', 'Error');
+%                 this.setStatus(this.STATUS.IWK_CONNECT);
+%             end
+%             set(this.fig, 'Pointer','arrow');
+%         end
+        
+        function setupModel(this)           
+            try 
+                this.setStatus(this.STATUS.BUSY);
+                set(this.fig, 'Pointer','watch');
+                
+                
                 %% Open and set model
                 modelName = this.settings.values.Simulink_model;
                 
@@ -430,17 +456,8 @@ classdef (Sealed) iWalkerSLAM < handle
                 % Simulink may optimise your model by integrating all your blocks. To
                 % prevent this, you need to disable the Block Reduction in the Optimisation
                 % settings.
-                set_param(modelName,'BlockReduction','off');
-                this.setStatus(this.STATUS.IWK_READY);
-            catch
-                errordlg('Problem loading simulink model', 'Error');
-                this.setStatus(this.STATUS.IWK_CONNECT);
-            end
-            set(this.fig, 'Pointer','arrow');
-        end
-        
-        function setupModel(this)
-            try 
+                set_param(modelName,'BlockReduction','off');               
+                
                 disp('Configurig model...');
                 s = this.settings.values;
                 modelName = s.Simulink_model;
@@ -466,7 +483,8 @@ classdef (Sealed) iWalkerSLAM < handle
                         sts = min([stl stw]);
                         set_param([modelName '/Sample Time Sync'], ...
                             'SampleTime', num2str(sts));
-
+                        
+                        this.setStatus(this.STATUS.IWK_READY);
                     case 'iWalkerHokuyoModel'
                         % Setup URG-04LX log block
                         stl = s.Simulink_SampleTimeLidar;
@@ -494,6 +512,9 @@ classdef (Sealed) iWalkerSLAM < handle
                         set_param([modelName '/Sample Time Sync'], ...
                             'SampleTime', num2str(sts));
 
+                         set_param([modelName '/EnableReactive'], ...
+                            'Value', num2str(s.Simulink_EnableReactiveControl));
+                        
                         % Setup leftLambda block
                         set_param([modelName '/leftLambda'], ...
                             'Value', num2str(s.Simulink_LeftLambda));
@@ -509,12 +530,15 @@ classdef (Sealed) iWalkerSLAM < handle
                         % Setup rightNu block
                         set_param([modelName '/rightNu'], ...
                             'Value', num2str(s.Simulink_RightNu));
-
+                        
+                        this.setStatus(this.STATUS.IWK_READY);
                     otherwise, error('Erroneus lidar');
                 end
             catch
-                errordlg('Problem configuring model', 'Error');
+                errordlg('Problem loading simulink model', 'Error');
+                this.setStatus(this.STATUS.IWK_CONNECT);
             end
+            set(this.fig, 'Pointer','arrow');
         end
         
         function localAddEventListener(this)
@@ -709,7 +733,7 @@ classdef (Sealed) iWalkerSLAM < handle
                     if strcmp(this.settings.values.Simulink_COM, '-')
                         this.setStatus(this.STATUS.IWK_CONNECT);
                     else
-                        this.initModel();
+                        %%this.initModel();
                         this.setupModel();
                         this.setStatus(this.STATUS.IWK_READY);
                         
