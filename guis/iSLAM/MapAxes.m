@@ -38,25 +38,32 @@ classdef MapAxes < hgsetget
         end
         
         function init(this)
-            if (~isempty(this.hAxes) && ishandle(this.hAxes))
-                delete(findall(this.hAxes));
+            if (isempty(this.hAxes) || ~ishandle(this.hAxes))
+                this.hAxes = handle(axes('Parent', this.Parent));
+                this.hAxes.LooseInset = this.hAxes.TightInset;
+                this.hAxes.ActivePositionProperty =  'OuterPosition';
+            else
+                delete(this.hAxes.Children);
             end
-            this.hAxes = handle(axes('Parent', this.Parent));
-            this.hAxes.LooseInset = this.hAxes.TightInset;
-            this.hAxes.ActivePositionProperty =  'OuterPosition';
-            axis xy;
-            axis on;
-            hold on;
+%             if (~isempty(this.hAxes) && ishandle(this.hAxes))
+%                 delete(findall(this.hAxes));
+%             end
+%             this.hAxes = handle(axes('Parent', this.Parent));
+%             this.hAxes.LooseInset = this.hAxes.TightInset;
+%             this.hAxes.ActivePositionProperty =  'OuterPosition';
+            axis(this.hAxes, 'xy');
+            axis(this.hAxes, 'on');
+            hold(this.hAxes, 'on');
         end
         
         function setImage(this, img, RI)
            if (isempty(this.hImg) || ~ishandle(this.hImg)) 
-              hold off;
+              hold(this.hAxes, 'off');
               this.hImg =  handle(imshow(img, RI));
               this.hImg.Parent = this.hAxes;
-              axis xy;
-              axis on;
-              hold on;
+              axis(this.hAxes, 'xy');
+              axis(this.hAxes, 'on');
+              hold(this.hAxes, 'on');
            else
               this.hImg.CData = img;
            end

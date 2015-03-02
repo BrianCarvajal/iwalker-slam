@@ -74,7 +74,7 @@ classdef LIDAR < hgsetget
             this.T = se2(0,0,0);
             this.angle = [];
             this.range = [];
-            this.validRange = [0.2 5];
+            this.validRange = [0.2 4];
             this.horizon = 6;
             this.outlierDist = 0.30;
             this.deadAngle = 0;

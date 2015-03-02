@@ -34,20 +34,30 @@ classdef RadarAxes < hgsetget
             this.init();
         end
         
+        
         function init(this)
-            if (~isempty(this.hAxes) && ishandle(this.hAxes))
-                delete(findall(this.hAxes));
+            if (isempty(this.hAxes) || ~ishandle(this.hAxes))
+                this.hAxes = handle(axes('Parent', this.Parent));
+                this.hAxes.LooseInset = this.hAxes.TightInset;
+                this.hAxes.ActivePositionProperty =  'OuterPosition';
+            else
+                delete(this.hAxes.Children);
             end
-            this.hAxes = handle(axes('Parent', this.Parent));
-            this.hAxes.LooseInset = this.hAxes.TightInset;
-            this.hAxes.ActivePositionProperty =  'OuterPosition';
+%             if (~isempty(this.hAxes) && ishandle(this.hAxes))
+%                 delete(findall(this.hAxes));
+%             end
+%             this.hAxes = handle(axes('Parent', this.Parent));
+%             this.hAxes.LooseInset = this.hAxes.TightInset;
+%             this.hAxes.ActivePositionProperty =  'OuterPosition';
             
             r = ceil(this.radius);
             
             xlim([-r-0.1 r+0.1]); ylim([-r-0.1 r+0.1]);
-            hold on;
-            axis off;
-            view(-90,90);
+            hold(this.hAxes, 'on');
+            axis(this.hAxes, 'off');
+            axis(this.hAxes, 'square');
+            view(this.hAxes, -90,90);
+            
             
             th = 0:pi/40:2*pi;
             x = r * cos(th);
@@ -97,7 +107,7 @@ classdef RadarAxes < hgsetget
                     'parent', this.hAxes);
             end
             
-            axis square;
+            
         end
         
         function erase(this, tag)

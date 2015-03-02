@@ -103,18 +103,26 @@ classdef (Sealed) iWalkerSLAM < handle
             
             % Create the main layout
             this.layout.background = uiextras.VBox('Parent', this.fig);
+            
             this.layout.main = uiextras.HBoxFlex('Parent', this.layout.background);
             this.statusbar.margin(1) = uiextras.Empty('Parent', this.layout.background);
             this.statusbar.bar = uiextras.HBox('Parent', this.layout.background);
-            this.statusbar.margin(2) =uiextras.Empty('Parent', this.layout.background);
-            
+            this.statusbar.margin(2) =uiextras.Empty('Parent', this.layout.background);           
             this.initStatusbar();
             
             set(this.layout.background, 'Sizes', [-1 this.statusbar.marginWidth 15 this.statusbar.marginWidth]);
+            
+            
             this.layout.leftPanel = uiextras.VBoxFlex('Parent', this.layout.main);
+            
             this.plots.radar = RadarAxes('Parent', this.layout.leftPanel);
-            uiextras.Empty('Parent', this.layout.leftPanel);
-            set(this.layout.leftPanel, 'Sizes', [-1 0], 'Spacing', 6);
+            
+            this.info.table = handle(uitable('Parent', this.layout.leftPanel));
+            this.initInfoTable();
+            %uiextras.Empty('Parent', this.layout.leftPanel);
+            
+            
+            set(this.layout.leftPanel, 'Sizes', [-0.5 -0.5], 'Spacing', 6);
             this.plots.map = MapAxes('Parent', this.layout.main);
             %gui.layout.tabpanel = uiextras.TabPanel('Parent', gui.layout.main);
             %Set the width of the left column (lidar plot and info box) and map
@@ -124,8 +132,7 @@ classdef (Sealed) iWalkerSLAM < handle
             this.settings = iSettings(this.settingsPath);
             this.sim = SimulationEngine();
             this.initSimulation();
-            
-            
+                       
             this.timers.simlog = timer('Name', 'DataLogTimer', ...
                 'BusyMode', 'queue', ...
                 'ExecutionMode', 'fixedRate', ...
@@ -276,6 +283,21 @@ classdef (Sealed) iWalkerSLAM < handle
             this.updatePlots_Callback();
             start(this.timers.plot);
         end
+        
+        
+        function initInfoTable(this)
+            t = this.info.table;
+            t.RowName = [];
+            t.ColumnName = [];
+            t.ColumnWidth = {200, 30, 30, 30};
+            t.Data = {'Pose [x, y, theta]'; ...
+                      'Angular Speed [left, right]'};
+            t.BackgroundColor = [.4 .4 .4; .4 .4 .8];
+            t.ForegroundColor = [1 1 1];
+            
+            t.Data(1,2:4) = {0, 0, 0};
+            t.Data(2,2:3) = {0, 0};
+        end
                
         
         function initSimulation(gui)
@@ -287,6 +309,7 @@ classdef (Sealed) iWalkerSLAM < handle
         %% State GUI Management
         function setStatus(this, status)
             this.state.status = status;
+            set(this.fig, 'Pointer','arrow');
             switch status
                 case this.STATUS.LOG_LOAD
                     set(this.info.status, ...
@@ -366,7 +389,7 @@ classdef (Sealed) iWalkerSLAM < handle
                         'backgroundcolor', this.COLOR.UNREADY);
                     this.disableToolbar();
                     set(this.toolbar.playButton, 'CData', this.icons.play);
-                    
+                    set(this.fig, 'Pointer','watch');
                 otherwise
                     error('Not valid status');
             end
@@ -439,17 +462,13 @@ classdef (Sealed) iWalkerSLAM < handle
 %             set(this.fig, 'Pointer','arrow');
 %         end
         
-        function setupModel(this)           
-            try 
-                this.setStatus(this.STATUS.BUSY);
-                set(this.fig, 'Pointer','watch');
-                
-                
+        function b = setupModel(this)
+            b = false;
+            try              
                 %% Open and set model
                 modelName = this.settings.values.Simulink_model;
                 
-                load_system(modelName); % change for load_system for not open the model window
-                
+                open_system(modelName); % change for load_system for not open the model window
                 % When the model starts, call the localAddEventListener function
                 set_param(modelName,'StartFcn','gui.localAddEventListener');
                 
@@ -484,7 +503,7 @@ classdef (Sealed) iWalkerSLAM < handle
                         set_param([modelName '/Sample Time Sync'], ...
                             'SampleTime', num2str(sts));
                         
-                        this.setStatus(this.STATUS.IWK_READY);
+                        b = true;
                     case 'iWalkerHokuyoModel'
                         % Setup URG-04LX log block
                         stl = s.Simulink_SampleTimeLidar;
@@ -531,21 +550,18 @@ classdef (Sealed) iWalkerSLAM < handle
                         set_param([modelName '/rightNu'], ...
                             'Value', num2str(s.Simulink_RightNu));
                         
-                        this.setStatus(this.STATUS.IWK_READY);
+                        b = true;
                     otherwise, error('Erroneus lidar');
                 end
-            catch
-                errordlg('Problem loading simulink model', 'Error');
-                this.setStatus(this.STATUS.IWK_CONNECT);
+            catch 
+                b = false;
             end
-            set(this.fig, 'Pointer','arrow');
         end
         
-        function localAddEventListener(this)
-            modelName = this.settings.values.Simulink_model;
+        function localAddEventListener(this)         
             % we need to save the event handlers or the callback won't be
             % executed
-            
+            modelName = this.settings.values.Simulink_model;
             switch modelName
                 case 'iWalkerRoboPeakModel'
                     this.eh = [ ...
@@ -557,6 +573,9 @@ classdef (Sealed) iWalkerSLAM < handle
                         
                         add_exec_event_listener([modelName '/High Frequency Odometry'], ...
                         'PostOutputs', @this.OdometryListener) ...
+                        
+                        add_exec_event_listener([modelName '/iWheels'], ...
+                        'PostOutputs', @this.iWheelsListener) ...
                         ];
                     
                 case 'iWalkerHokuyoModel'
@@ -569,6 +588,15 @@ classdef (Sealed) iWalkerSLAM < handle
                         
                         add_exec_event_listener([modelName '/High Frequency Odometry'], ...
                         'PostOutputs', @this.OdometryListener) ...
+                        
+                        add_exec_event_listener([modelName '/iWheels'], ...
+                        'PostOutputs', @this.iWheelsListener) ...
+                        
+                        add_exec_event_listener([modelName '/IMU'], ...
+                        'PostOutputs', @this.IMUListener) ...
+                        
+                        add_exec_event_listener([modelName '/FORCES'], ...
+                        'PostOutputs', @this.FORCESListener) ...
                         ];
             end
         end
@@ -579,6 +607,9 @@ classdef (Sealed) iWalkerSLAM < handle
         
         function OdometryListener(this, rtb, ~)
             this.sim.stepOdometry(rtb.OutputPort(1).Data);
+            
+            t = this.info.table;
+            t.Data(1,2:4) = {this.sim.rob.x(1), this.sim.rob.x(2), this.sim.rob.x(3)};
         end
         
         function rplidarEventListener(this, rtb, ~)
@@ -586,6 +617,7 @@ classdef (Sealed) iWalkerSLAM < handle
             if length > 0
                 range = double(rtb.OutputPort(1).Data(1:length))/1000;
                 angle = double(rtb.OutputPort(2).Data(1:length));
+                angle = mod(angle+180, 360);
             else
                 range = 0;
                 angle = 0;
@@ -599,6 +631,33 @@ classdef (Sealed) iWalkerSLAM < handle
             angle = ((0.3515625 *((1:682) - 1)) - 120);
             this.sim.stepScan(range', angle);
             this.redrawScan = true;
+        end
+        
+        function iWheelsListener(this, rtb, ~)
+            leftDRPM = rtb.OutputPort(1).Data;
+            rightDRPM = rtb.OutputPort(2).Data;
+            
+            t = this.info.table;
+            t.Data(2,2:3) = {leftDRPM, rightDRPM};
+        end
+        
+        function IMUListener(this, rtb, ~)
+            accelX = rtb.OutputPort(1).Data;
+            accelY = rtb.OutputPort(2).Data;
+            gyroYAW = rtb.OutputPort(3).Data;
+        end
+        
+        function FORCESListener(this, rtb, ~)
+            leftHandFx = rtb.OutputPort(1).Data;
+            leftHandFy = rtb.OutputPort(2).Data;
+            leftHandFz = rtb.OutputPort(3).Data;
+            leftBrake = rtb.OutputPort(4).Data;
+            rightHandFx = rtb.OutputPort(5).Data;
+            rightHandFy = rtb.OutputPort(6).Data;
+            rightHandFz = rtb.OutputPort(7).Data;
+            rightBrake = rtb.OutputPort(8).Data;
+            leftLegF = rtb.OutputPort(9).Data;
+            rightLefF = rtb.OutputPort(10).Data;
         end
         
         
@@ -669,6 +728,10 @@ classdef (Sealed) iWalkerSLAM < handle
                     switch s.source
                         case 'wheels'
                             this.sim.stepOdometry(s.data.odo);
+                            
+                            t = this.info.table;
+                            
+                            
                         case 'lidar'
                             this.sim.stepScan(s.data.range/1000, s.data.angle);
                             this.redrawScan = true;
@@ -734,9 +797,14 @@ classdef (Sealed) iWalkerSLAM < handle
                         this.setStatus(this.STATUS.IWK_CONNECT);
                     else
                         %%this.initModel();
-                        this.setupModel();
-                        this.setStatus(this.STATUS.IWK_READY);
-                        
+                        this.setStatus(this.STATUS.BUSY);
+                        modelOK = this.setupModel();
+                        if modelOK
+                            this.setStatus(this.STATUS.IWK_READY);
+                        else
+                            this.setStatus(this.STATUS.IWK_CONNECT);
+                            errordlg('Problem loading simulink model', 'Error');
+                        end  
                     end
                     set(this.info.endTime, 'string', 'Inf');
             end
@@ -770,21 +838,25 @@ classdef (Sealed) iWalkerSLAM < handle
         
         
         function playButton_Callback(this, ~, ~)         
-            if this.state.mode == this.MODE.ONLINE
-                
+            if this.state.mode == this.MODE.ONLINE              
                 if this.continuaAndDiscard()
-                    this.setStatus(this.STATUS.BUSY);
-                    set(this.fig, 'Pointer','watch');
-                    this.setupModel();
-                    this.initSimulation();
-                    set_param( this.settings.values.Simulink_model, 'SimulationCommand', 'start');
-                    this.setStatus(this.STATUS.IWK_RUNNING);
+                    this.setStatus(this.STATUS.BUSY);             
+                    %modelOK = this.setupModel();
+                    modelOK = true;
+                    if modelOK
+                        this.initSimulation();
+                        set_param( this.settings.values.Simulink_model, 'SimulationCommand', 'start');
+                        this.setStatus(this.STATUS.IWK_RUNNING);
+                    else
+                        this.setStatus(this.STATUS.IWK_READY);
+                        errordlg('Problem starting the model', 'Error');
+                    end
                 end
             else
                 switch this.state.status
                     case this.STATUS.LOG_READY % start log simulation
                         this.setStatus(this.STATUS.BUSY);
-                        set(this.fig, 'Pointer','watch');
+       
                         this.dlog.init();
                         this.sim.settings.Rob.dt = this.dlog.dt;
                         this.initSimulation();
@@ -804,7 +876,6 @@ classdef (Sealed) iWalkerSLAM < handle
                         this.setStatus(this.STATUS.IWK_RUNNING);
                 end
             end
-            set(this.fig, 'Pointer','arrow');
         end
         
         function stepButton_Callback(this, ~, ~)
@@ -860,9 +931,14 @@ classdef (Sealed) iWalkerSLAM < handle
                 if strcmp(this.settings.values.Simulink_COM, '-')
                     this.setStatus(this.STATUS.IWK_CONNECT);
                 else
-                    
-                    this.setupModel();
-                    this.setStatus(this.STATUS.IWK_READY);
+                    this.setStatus(this.STATUS.BUSY);
+                    modelOK = this.setupModel();
+                    if modelOK
+                        this.setStatus(this.STATUS.IWK_READY);
+                    else
+                        this.setStatus(this.STATUS.IWK_CONNECT);
+                        errordlg('Problem starting the model', 'Error');
+                    end                  
                 end
             end
         end
