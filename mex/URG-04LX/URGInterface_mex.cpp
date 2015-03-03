@@ -241,6 +241,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (nrhs < 1 || mxGetString(prhs[0], cmd, sizeof(cmd)))
         mexErrMsgTxt("First input should be a command string less than 64 characters long.");
     
+    mexPrintf("URG: commmand [%s]\n", cmd);
+    
     // New
     if (!strcmp("new", cmd)) {
         // Check parameters
@@ -282,7 +284,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     //Disconnect
-    if (!strcmp("connect", cmd))
+    if (!strcmp("disconnect", cmd))
     {
         // Check parameters
         if (nlhs != 1 || nrhs != 3)
