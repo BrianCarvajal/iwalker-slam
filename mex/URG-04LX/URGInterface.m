@@ -5,8 +5,8 @@ classdef URGInterface < handle
     end
     methods
         %% Constructor - Create a new C++ class instance 
-        function this = class_interface(varargin)
-            this.objectHandle = class_interface_mex('new', varargin{:});
+        function this = URGInterface()
+            this.objectHandle = class_interface_mex('new');
         end
         
         %% Destructor - Destroy the C++ class instance

@@ -1,6 +1,6 @@
 %CLASS_INTERFACE Example MATLAB class wrapper to an underlying C++ class
 classdef RPLidarInterface < handle
-    properties (SetAccess = private, Hidden = true)
+    properties %(SetAccess = private, Hidden = true)
         objectHandle; % Handle to the underlying C++ class instance
     end
     methods

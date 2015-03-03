@@ -8,106 +8,15 @@
 #include <tchar.h>
 
 // The class that we are interfacing to
-class URG
+class urg
 {
-private:
-    HANDLE hCom;
-    DCB dcb;
-    bool verbose;
-    
-    union {
-        unsigned char bytes[4];
-        unsigned int val;
-    } biconvert;
-    
-    
-     int startSingleScan()
-    {
-        DWORD dwBytesWritten = 0;
-        int res = 0;
-        char msg[256];
-        sprintf(msg,"MS0044072500001\n");
-        
-        if(!WriteFile(hCom, msg, strlen(msg), &dwBytesWritten, NULL))
-        {
-            if (verbose) mexPrintf( "URG: Error writing text to %s\n", msg);
-        }
-        else
-        {
-            if (verbose) mexPrintf( "URG: %d bytes written\n", dwBytesWritten);
-        }
-        return dwBytesWritten;
-    }
-     
-     int readURG(unsigned char *buf, int size)
-     {
-         unsigned long aux = size;
-         if (ReadFile(hCom, buf, size, &aux, NULL) == 0)
-         {
-             if (verbose) printf("URG: read failed\n");
-             return 0;
-         } 
-         else 
-         {
-             if (verbose) printf("URG: read OK\n");
-         }
-         if (aux > 0)
-         {
-             return (int)aux;
-         }
-         return (int)0-aux;
-     }
-     
-     short char_decode(const unsigned char data[], int data_byte)
-     {
-         short value = 0;
-         int i;
-         
-         for (i = 0; i < data_byte; ++i) {
-             value <<= 6;
-             value &= ~0x3f;
-             value |= data[i] - 0x30;
-         }       
-         return value;
-     }
-     
-     void urg_decode(unsigned char *buf, int *res) 
-     {         
-         int k;
-         int i,idx,j=0;
-         unsigned char data[2];
-         char startIdx=47;  // era 26
-         
-         for (k=0; k<21; k++) {
-             
-             idx = startIdx + k*66;
-             
-             for (i=0;i<64;i+=2) {
-                 
-                 data[0]=buf[idx + i];
-                 data[1]=buf[idx + i+1];
-                 res[j] = char_decode(data, 2);
-                 j++;
-             }
-         }
-         
-         idx = startIdx + 21*66;         
-         for (i=0;i<20;i+=2) {
-             
-             data[0]=buf[idx + i];
-             data[1]=buf[idx + i +1];
-             res[j] = char_decode(data, 2);
-             j++;
-         }
-     }
-    
 public:
-    URG()
+    urg()
     {
         verbose = true;
     }
     
-    ~URG()
+    ~urg()
     {
         disconnect();
     }
@@ -131,8 +40,8 @@ public:
         
         if (hCom == INVALID_HANDLE_VALUE)
         {
-           if (verbose) mexPrintf("URG: Error opening Port\n");
-           return false;
+            if (verbose) mexPrintf("URG: Error opening Port\n");
+            return false;
         }
         
         ZeroMemory(&dcb, sizeof(dcb));
@@ -170,14 +79,14 @@ public:
         unsigned char aux[2732];
         int res[682];
         act = 0;
-        while((readURG(&car, sizeof(car)))==1) 
+        while((readURG(&car, sizeof(car)))==1)
         {
             buf[act] = car;
             act++;
             if ((act>1) && ((buf[act-1] == '\r') || (buf[act-1] == '\n')) &&
                     ((buf[act-2] == '\r') || (buf[act-2] == '\n')))
             {
-                if (act>1000) 
+                if (act>1000)
                 {
                     buf[act] = '\0';
                     
@@ -218,7 +127,7 @@ public:
                 negative = true;
                 break;
             }
-            else 
+            else
             {
                 rangeOutput[i] = res[i];
             }
@@ -228,7 +137,99 @@ public:
         {
             for (int i = 0; i < 682; ++i) rangeOutput[i] = 0;
         }
-    }   
+    }
+    
+private:
+    HANDLE hCom;
+    DCB dcb;
+    bool verbose;
+    
+    union {
+        unsigned char bytes[4];
+        unsigned int val;
+    } biconvert;
+    
+    
+    int startSingleScan()
+    {
+        DWORD dwBytesWritten = 0;
+        int res = 0;
+        char msg[256];
+        sprintf(msg,"MS0044072500001\n");
+        
+        if(!WriteFile(hCom, msg, strlen(msg), &dwBytesWritten, NULL))
+        {
+            if (verbose) mexPrintf( "URG: Error writing text to %s\n", msg);
+        }
+        else
+        {
+            if (verbose) mexPrintf( "URG: %d bytes written\n", dwBytesWritten);
+        }
+        return dwBytesWritten;
+    }
+    
+    int readURG(unsigned char *buf, int size)
+    {
+        unsigned long aux = size;
+        if (ReadFile(hCom, buf, size, &aux, NULL) == 0)
+        {
+            if (verbose) printf("URG: read failed\n");
+            return 0;
+        }
+        else
+        {
+            if (verbose) printf("URG: read OK\n");
+        }
+        if (aux > 0)
+        {
+            return (int)aux;
+        }
+        return (int)0-aux;
+    }
+    
+    short char_decode(const unsigned char data[], int data_byte)
+    {
+        short value = 0;
+        int i;
+        
+        for (i = 0; i < data_byte; ++i) {
+            value <<= 6;
+            value &= ~0x3f;
+            value |= data[i] - 0x30;
+        }
+        return value;
+    }
+    
+    void urg_decode(unsigned char *buf, int *res)
+    {
+        int k;
+        int i,idx,j=0;
+        unsigned char data[2];
+        char startIdx=47;  // era 26
+        
+        for (k=0; k<21; k++) {
+            
+            idx = startIdx + k*66;
+            
+            for (i=0;i<64;i+=2) {
+                
+                data[0]=buf[idx + i];
+                data[1]=buf[idx + i+1];
+                res[j] = char_decode(data, 2);
+                j++;
+            }
+        }
+        
+        idx = startIdx + 21*66;
+        for (i=0;i<20;i+=2) {
+            
+            data[0]=buf[idx + i];
+            data[1]=buf[idx + i +1];
+            res[j] = char_decode(data, 2);
+            j++;
+        }
+    }
+    
 };
 
 void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
@@ -244,7 +245,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         if (nlhs != 1)
             mexErrMsgTxt("New: One output expected.");
         // Return a handle to a new C++ instance
-        plhs[0] = convertPtr2Mat<URG>(new URG);
+        plhs[0] = convertPtr2Mat<urg>(new urg);
         return;
     }
     
@@ -255,7 +256,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     // Delete
     if (!strcmp("delete", cmd)) {
         // Destroy the C++ object
-        destroyObject<URG>(prhs[1]);
+        destroyObject<urg>(prhs[1]);
         // Warn if other commands were ignored
         if (nlhs != 0 || nrhs != 2)
             mexWarnMsgTxt("Delete: Unexpected arguments ignored.");
@@ -263,7 +264,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     }
     
     // Get the class instance pointer from the second input
-    URG *urg = convertMat2Ptr<URG>(prhs[1]);
+    urg *lid = convertMat2Ptr<urg>(prhs[1]);
     
     // Call the various class methods
     //Connect
@@ -274,7 +275,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             mexErrMsgTxt("Connect: Unexpected arguments.");
         
         int port = (int)mxGetScalar(prhs[2]);
-        plhs[0]=  mxCreateLogicalScalar(urg->connect(port));
+        plhs[0]=  mxCreateLogicalScalar(lid->connect(port));
         return;
     }
     
@@ -286,14 +287,14 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             mexErrMsgTxt("Disconnect: Unexpected arguments.");
         
         int port = (int)mxGetScalar(prhs[2]);
-        plhs[0]=  mxCreateLogicalScalar(urg->disconnect());
+        plhs[0]=  mxCreateLogicalScalar(lid->disconnect());
         return;
     }
     
     // getScan
     if (!strcmp("getScan", cmd))
     {
-         // Check parameters
+        // Check parameters
         if (nlhs != 1 || nrhs != 2)
             mexErrMsgTxt("Test: Unexpected arguments.");
         
@@ -301,7 +302,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         plhs[0] = mxCreateDoubleMatrix(1,682,mxREAL);
         double *outRange = mxGetPr(plhs[2]);
         
-        urg->getScan(outRange);
+        lid->getScan(outRange);
         return;
     }
     
