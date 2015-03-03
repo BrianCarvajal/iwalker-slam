@@ -302,7 +302,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         
         // Allocate output arrays
         plhs[0] = mxCreateDoubleMatrix(1,682,mxREAL);
-        double *outRange = mxGetPr(plhs[2]);
+        double *outRange = mxGetPr(plhs[0]);
         
         lid->getScan(outRange);
         return;
