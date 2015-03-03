@@ -14,6 +14,14 @@ classdef CANUSBInterface < handle
             CANUSBInterface_mex('delete', this.objectHandle);
         end
         
+        function success = connect(this)
+            success = CANUSBInterface_mex('connect', this.objectHandle);
+        end
+        
+        function success = disconnect(this)
+            success = CANUSBInterface_mex('disconnect', this.objectHandle);
+        end
+        
         %% Read - Read the frame with the given [id]
         function data = read(this, id)
             data = CANUSBInterface_mex('read', this.objectHandle, uint32(id));

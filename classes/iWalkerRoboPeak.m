@@ -1,14 +1,10 @@
 classdef iWalkerRoboPeak < hgsetget
     %UNTITLED Summary of this class goes here
-    %   Detailed explanation goes here
-    
-    
-    
+    %   Detailed explanation goes here         
     properties
         canusb
-        rplidar 
-        
-        
+        rplidar
+        time
     end
     
     properties (SetAccess = private, Hidden = true)
@@ -24,7 +20,10 @@ classdef iWalkerRoboPeak < hgsetget
     
     methods
         function this = iWalkerRoboPeak()
+            this.rplidar = RPLidarInterface();
+            this.canusb = CANUSBInterface();
             this.prevPose = [0 0 0];
+            this.time = 0;
             this.rplidar_timer = timer(...
                 'Name', 'RPLidarTimer', ...
                 'BusyMode', 'queue', ...
@@ -47,6 +46,8 @@ classdef iWalkerRoboPeak < hgsetget
         end
         
         function start(this)
+            this.time = 0;
+            tic;
             start(this.rplidar_timer);
             start(this.canusb_timer);
         end
@@ -66,13 +67,16 @@ classdef iWalkerRoboPeak < hgsetget
             if strcmp(this.canusb_timer.Running, 'off') && st > 0
                 this.canusb_timer.Period = st;
             end
+        end              
+        
+        function success = connect(this, COM)
+            success.lidar = this.rplidar.connect(COM);
+            success.canusb = this.canusb.connect();
         end
-             
-          
-        function connect(this, COM)
-            this.rplidar = RPLidarInterface();
-            this.rplidar.connect(COM);
-            this.canusb = CANUSBInterface();
+        
+        function success = disconnect(this)
+            success.lidar = this.rplidar.disconnect();
+            success.canusb = this.canusb.disconnect();
         end
         
         function [pose, odo] = readPose(this)
@@ -96,12 +100,14 @@ classdef iWalkerRoboPeak < hgsetget
         end
         
         function rplidar_callback(this, t, ~)
+            this.time = toc;
             d = [];
             [d.freq, d.count, d.range, d.angle] = this.rplidar.getScan();          
             notify(this, 'lidarReaded', iWalkerEventData(d));           
         end
         
         function canusb_callback(this, t, ~)
+            this.time = toc;
             d = [];
             [d.pose, d.odo] = this.readPose();
             d.w = this.readAngularVelocity();

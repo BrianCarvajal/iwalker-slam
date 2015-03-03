@@ -18,7 +18,6 @@ public:
     CANUSB()
     {
         hndCAN = 0;
-        connect();
     }
            
     ~CANUSB()
@@ -28,19 +27,36 @@ public:
     
     bool connect() 
     {
-        int err;
+        int statCAN;
         if (hndCAN != 0)
         {
             mexPrintf("CANUSB already connected!\n");
+            return true;
+        }
+        char szAdapter[32];
+        int numOfAdapters = canusb_getFirstAdapter(szAdapter, sizeof(szAdapter));
+        mexPrintf("CANUSB: %d device(s) found!\n", numOfAdapters);
+        if (numOfAdapters < 1)
+        {
             return false;
         }
+            
+// Creo que esta parte provoca cuelgues. No parece que tenga mucho sentido
+// pasar a una función el handler aun no inicializado.
+//         statCAN = canusb_Status(hndCAN);
+//         
+//         mexPrintf("CANUSB Status: (%d)\n", statCAN);
+//         if (statCAN < 1) 
+//         {
+//             
+//             return false;
+//         }
         
-        err = canusb_Status(hndCAN);
-        mexPrintf("CANUSB Status: (%d)\n", err);
-        
-        hndCAN = canusb_Open(0,"1000",CANUSB_ACCEPTANCE_CODE_ALL,
+        hndCAN = canusb_Open(NULL,"1000",CANUSB_ACCEPTANCE_CODE_ALL,
                                       CANUSB_ACCEPTANCE_MASK_ALL,
                                       CANUSB_FLAG_QUEUE_REPLACE);
+        
+        
         
         if (hndCAN == 0) 
         {
@@ -70,6 +86,7 @@ public:
         } 
         else
         {
+            hndCAN = 0;
             mexPrintf("CANUSB close ok!\n");
             return true;
         }
@@ -179,27 +196,26 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     // Get the class instance pointer from the second input
     CANUSB *canusb = convertMat2Ptr<CANUSB>(prhs[1]);
     
-    // Call the various class methods
-    if (!strcmp("test", cmd))
+    //Connect
+    if (!strcmp("connect", cmd))
     {
         // Check parameters
-        if (nlhs < 1 || nrhs < 3)
-            mexErrMsgTxt("Test: Unexpected arguments.");
+        if (nlhs > 1 || nrhs != 2)
+            mexErrMsgTxt("Connect: Unexpected arguments.");
         
+        plhs[0]=  mxCreateLogicalScalar(canusb->connect());
+        return;
+    }
+    
+    //Connect
+    if (!strcmp("disconnect", cmd))
+    {
+        // Check parameters
+        if (nlhs > 1 || nrhs != 2)
+            mexErrMsgTxt("Disconnect: Unexpected arguments.");
         
-        if (!mxIsUint8(prhs[2]))
-        {
-            mexErrMsgTxt("Test: 3rd argument must be a uint8 array");
-        }
-        _u8 *input = (_u8*)mxGetData(prhs[2]);
-        
-        
-        // Allocate output array
-        plhs[0] = mxCreateNumericMatrix(1, 8, mxUINT8_CLASS, mxREAL);       
-        _u8 *output = (_u8*)mxGetData(plhs[0]);
-        
-        for (int i = 0; i < 8; ++i) output[i] = input[i]+1;
-        return; 
+        plhs[0]=  mxCreateLogicalScalar(canusb->disconnect());
+        return;
     }
     
     if (!strcmp("read", cmd))

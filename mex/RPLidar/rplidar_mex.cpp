@@ -26,7 +26,7 @@ private:
 public:
     rplidarmex()
     {
-        mexPrintf("Hello !\n");
+        drv = NULL;
     }
     
     ~rplidarmex()

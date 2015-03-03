@@ -112,7 +112,7 @@ public:
         disconnect();
     }
     
-    void connect(int COMnumber)
+    bool connect(int COMnumber)
     {
         char portString[20];
         if (verbose)
@@ -132,7 +132,7 @@ public:
         if (hCom == INVALID_HANDLE_VALUE)
         {
            if (verbose) mexPrintf("URG: Error opening Port\n");
-           return;
+           return false;
         }
         
         ZeroMemory(&dcb, sizeof(dcb));
@@ -148,22 +148,24 @@ public:
             SetCommState(hCom, &dcb);
             if (verbose) mexPrintf(" Ok!\n");
             startSingleScan();
+            return true;
         }
         else {
             if (verbose) mexPrintf("URG: Error opening Port\n");
+            return false;
         }
     }
     
-    void disconnect()
+    bool disconnect()
     {
         CloseHandle(hCom);
+        return true;
     }
     
     void getScan(double *rangeOutput)
     {
         int act;
         unsigned char car;
-        int negative;
         unsigned char buf[2000];
         unsigned char aux[2732];
         int res[682];
@@ -208,12 +210,12 @@ public:
             }
         }
         startSingleScan();
-        negative = 0;
+        bool negative = false;
         for (int i = 0; i < 682; ++i)
         {
             if (res[i] < 0)
             {
-                negative = 1;
+                negative = true;
                 break;
             }
             else 
@@ -222,7 +224,7 @@ public:
             }
         }
         // Si hay algun negativo son datos invaldiso: devolvemos todo 0
-        if (negative == 1)
+        if (negative)
         {
             for (int i = 0; i < 682; ++i) rangeOutput[i] = 0;
         }
@@ -276,6 +278,17 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         return;
     }
     
+    //Disconnect
+    if (!strcmp("connect", cmd))
+    {
+        // Check parameters
+        if (nlhs != 0 || nrhs != 3)
+            mexErrMsgTxt("Disconnect: Unexpected arguments.");
+        
+        int port = (int)mxGetScalar(prhs[2]);
+        plhs[0]=  mxCreateLogicalScalar(urg->disconnect());
+        return;
+    }
     
     // getScan
     if (!strcmp("getScan", cmd))

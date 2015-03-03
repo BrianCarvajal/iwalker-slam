@@ -18,6 +18,11 @@ classdef URGInterface < handle
         function success = connect(this, port)
             success = class_interface_mex('connect', this.objectHandle, port);
         end
+        
+        %% Disconnect - Connect the device at [port]
+        function success = disconnect(this)
+            success = class_interface_mex('disconnect', this.objectHandle);
+        end
 
         %% GetScan - Get [range] data from the lidar in mm
         function range = getScan(this, varargin)

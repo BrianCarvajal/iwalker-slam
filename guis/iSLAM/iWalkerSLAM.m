@@ -6,6 +6,7 @@ classdef (Sealed) iWalkerSLAM < handle
         fig         % the windows itself
         sim         % EngineSimulator
         dlog        % DataLog
+        iwalker     % iWalker Interface
     end
     
     
@@ -191,12 +192,12 @@ classdef (Sealed) iWalkerSLAM < handle
                 'TooltipString','Load a datalog',...
                 'HandleVisibility','off', ...
                 'ClickedCallback', @this.loadLog_Callback);
-            % Load log button
-            this.toolbar.simulink = uipushtool(this.toolbar.bar, ...
-                'CData', this.icons.simulink,...
-                'TooltipString','Open simulink model',...
-                'HandleVisibility','off', ...
-                'ClickedCallback', @this.loadModel_Callback);
+%             % Load log button
+%             this.toolbar.simulink = uipushtool(this.toolbar.bar, ...
+%                 'CData', this.icons.simulink,...
+%                 'TooltipString','Open simulink model',...
+%                 'HandleVisibility','off', ...
+%                 'ClickedCallback', @this.loadModel_Callback);
             
             % Zoom button
             this.toolbar.zoomIn = uitoggletool(this.toolbar.bar, ...
@@ -361,7 +362,7 @@ classdef (Sealed) iWalkerSLAM < handle
                     this.disableToolbar();
                     set(this.toolbar.settings, 'enable', 'on');
                     set(this.toolbar.mode, 'enable', 'on');
-                    set(this.toolbar.simulink, 'enable', 'on');
+%                     set(this.toolbar.simulink, 'enable', 'on');
                     set(this.toolbar.zoomIn, 'enable', 'on');
                     
                 case this.STATUS.IWK_READY
@@ -371,7 +372,7 @@ classdef (Sealed) iWalkerSLAM < handle
                     set(this.toolbar.playButton, 'enable', 'on');   
                     set(this.toolbar.mode, 'enable', 'on');
                     set(this.toolbar.settings, 'enable', 'on');
-                    set(this.toolbar.simulink, 'enable', 'on');
+%                     set(this.toolbar.simulink, 'enable', 'on');
                     set(this.toolbar.saveLogButton, 'enable', 'on');
                     
                 case this.STATUS.IWK_RUNNING
@@ -399,7 +400,7 @@ classdef (Sealed) iWalkerSLAM < handle
             set(this.toolbar.settings, 'enable', 'off');
             set(this.toolbar.mode, 'enable', 'off');
             set(this.toolbar.loadLog, 'enable', 'off');
-            set(this.toolbar.simulink, 'enable', 'off');
+%             set(this.toolbar.simulink, 'enable', 'off');
             set(this.toolbar.zoomIn, 'enable', 'off');
             set(this.toolbar.stopButton, 'enable', 'off');
             set(this.toolbar.playButton, 'enable', 'off');
@@ -416,7 +417,7 @@ classdef (Sealed) iWalkerSLAM < handle
                         'TooltipString','Swap source to iWalker');
                     set(this.info.mode, 'string', 'Datalog');
                     set(this.toolbar.loadLog, 'visible', 'on');
-                    set(this.toolbar.simulink, 'visible', 'off');
+%                     set(this.toolbar.simulink, 'visible', 'off');
                     set(this.toolbar.stepButton, 'visible', 'on');
                     set(this.toolbar.saveLogButton, 'visible', 'off');
                 case this.MODE.ONLINE;
@@ -426,7 +427,7 @@ classdef (Sealed) iWalkerSLAM < handle
                         'TooltipString','Swap source to Log');
                     set(this.info.mode, 'string', 'iWalker');
                     set(this.toolbar.loadLog, 'visible', 'off');
-                    set(this.toolbar.simulink, 'visible', 'on');
+%                     set(this.toolbar.simulink, 'visible', 'on');
                     set(this.toolbar.stepButton, 'visible', 'off');
                     set(this.toolbar.saveLogButton, 'visible', 'on');
                     set(this.toolbar.saveLogButton, 'enable', 'off');
@@ -437,230 +438,308 @@ classdef (Sealed) iWalkerSLAM < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %% Simulink Management
-        
-%         function initModel(this)
-%             this.setStatus(this.STATUS.BUSY);
-%             set(this.fig, 'Pointer','watch');
-%             try
+
+%         
+%         function b = setupModel(this)
+%             b = false;
+%             try              
 %                 %% Open and set model
 %                 modelName = this.settings.values.Simulink_model;
 %                 
-%                 load_system(modelName); % change for load_system for not open the model window
-%                 
+%                 open_system(modelName); % change for load_system for not open the model window
 %                 % When the model starts, call the localAddEventListener function
 %                 set_param(modelName,'StartFcn','gui.localAddEventListener');
 %                 
 %                 % Simulink may optimise your model by integrating all your blocks. To
 %                 % prevent this, you need to disable the Block Reduction in the Optimisation
 %                 % settings.
-%                 set_param(modelName,'BlockReduction','off');
-%                 this.setStatus(this.STATUS.IWK_READY);
-%             catch
-%                 errordlg('Problem loading simulink model', 'Error');
-%                 this.setStatus(this.STATUS.IWK_CONNECT);
+%                 set_param(modelName,'BlockReduction','off');               
+%                 
+%                 disp('Configurig model...');
+%                 s = this.settings.values;
+%                 modelName = s.Simulink_model;
+%                 if ~strcmp(s.Simulink_COM, '-')
+%                     portNumber = strrep(s.Adquisition_COM, 'COM', '');
+%                 else
+%                     error('COM Port not connected');
+%                 end
+%                 switch (modelName)
+%                     case 'iWalkerRoboPeakModel'
+%                         %Setup RPLidar block
+%                         stl = s.Adquisition_SampleTimeLidar;
+%                         set_param([modelName '/RPLidar'], ...
+%                             'SampleTime', num2str(stl),...
+%                             'COM', portNumber);
+% 
+%                         % Setup iWheels block
+%                         stw = s.Adquisition_SampleTimeCAN;
+%                         set_param([modelName '/iWheels'], ...
+%                             'SampleTime', num2str(stw));
+% 
+%                         % Setup Sample Tyme Sync block
+%                         sts = min([stl stw]);
+%                         set_param([modelName '/Sample Time Sync'], ...
+%                             'SampleTime', num2str(sts));
+%                         
+%                         b = true;
+%                     case 'iWalkerHokuyoModel'
+%                         % Setup URG-04LX log block
+%                         stl = s.Adquisition_SampleTimeLidar;
+%                         set_param([modelName '/Hokuyo'], ...
+%                             'SampleTime', num2str(stl),...
+%                             'COM', portNumber);
+% 
+%                         % Setup iWheels block
+%                         stw = s.Adquisition_SampleTimeCAN;
+%                         set_param([modelName '/iWheels'], ...
+%                             'SampleTime', num2str(stw));
+% 
+%                         % Setup IMU block
+%                         set_param([modelName '/IMU'], ...
+%                             'SampleTime', num2str(stw),...
+%                             'UserData', gcbo);
+% 
+%                         % Setup FORCES block
+%                         set_param([modelName '/FORCES'], ...
+%                             'SampleTime', num2str(stw),...
+%                             'UserData', gcbo);
+% 
+%                         % Setup Sample Tyme Sync block
+%                         sts = min([stl,stw]);
+%                         set_param([modelName '/Sample Time Sync'], ...
+%                             'SampleTime', num2str(sts));
+% 
+%                          set_param([modelName '/EnableReactive'], ...
+%                             'Value', num2str(s.Adquisition_EnableReactiveControl));
+%                         
+%                         % Setup leftLambda block
+%                         set_param([modelName '/leftLambda'], ...
+%                             'Value', num2str(s.Adquisition_LeftLambda));
+% 
+%                         % Setup rightLambda block
+%                         set_param([modelName '/rightLambda'], ...
+%                             'Value', num2str(s.Adquisition_RightLambda));
+% 
+%                         % Setup leftNu block
+%                         set_param([modelName '/leftNu'], ...
+%                             'Value', num2str(s.Adquisition_LeftNu));
+% 
+%                         % Setup rightNu block
+%                         set_param([modelName '/rightNu'], ...
+%                             'Value', num2str(s.Adquisition_RightNu));
+%                         
+%                         b = true;
+%                     otherwise, error('Erroneus lidar');
+%                 end
+%             catch 
+%                 b = false;
 %             end
-%             set(this.fig, 'Pointer','arrow');
 %         end
         
-        function b = setupModel(this)
-            b = false;
-            try              
-                %% Open and set model
-                modelName = this.settings.values.Simulink_model;
-                
-                open_system(modelName); % change for load_system for not open the model window
-                % When the model starts, call the localAddEventListener function
-                set_param(modelName,'StartFcn','gui.localAddEventListener');
-                
-                % Simulink may optimise your model by integrating all your blocks. To
-                % prevent this, you need to disable the Block Reduction in the Optimisation
-                % settings.
-                set_param(modelName,'BlockReduction','off');               
-                
-                disp('Configurig model...');
-                s = this.settings.values;
-                modelName = s.Simulink_model;
-                if ~strcmp(s.Simulink_COM, '-')
-                    portNumber = strrep(s.Simulink_COM, 'COM', '');
-                else
-                    error('COM Port not connected');
-                end
-                switch (modelName)
-                    case 'iWalkerRoboPeakModel'
-                        %Setup RPLidar block
-                        stl = s.Simulink_SampleTimeLidar;
-                        set_param([modelName '/RPLidar'], ...
-                            'SampleTime', num2str(stl),...
-                            'COM', portNumber);
-
-                        % Setup iWheels block
-                        stw = s.Simulink_SampleTimeOdometry;
-                        set_param([modelName '/iWheels'], ...
-                            'SampleTime', num2str(stw));
-
-                        % Setup Sample Tyme Sync block
-                        sts = min([stl stw]);
-                        set_param([modelName '/Sample Time Sync'], ...
-                            'SampleTime', num2str(sts));
-                        
-                        b = true;
-                    case 'iWalkerHokuyoModel'
-                        % Setup URG-04LX log block
-                        stl = s.Simulink_SampleTimeLidar;
-                        set_param([modelName '/Hokuyo'], ...
-                            'SampleTime', num2str(stl),...
-                            'COM', portNumber);
-
-                        % Setup iWheels block
-                        stw = s.Simulink_SampleTimeOdometry;
-                        set_param([modelName '/iWheels'], ...
-                            'SampleTime', num2str(stw));
-
-                        % Setup IMU block
-                        set_param([modelName '/IMU'], ...
-                            'SampleTime', num2str(stw),...
-                            'UserData', gcbo);
-
-                        % Setup FORCES block
-                        set_param([modelName '/FORCES'], ...
-                            'SampleTime', num2str(stw),...
-                            'UserData', gcbo);
-
-                        % Setup Sample Tyme Sync block
-                        sts = min([stl,stw]);
-                        set_param([modelName '/Sample Time Sync'], ...
-                            'SampleTime', num2str(sts));
-
-                         set_param([modelName '/EnableReactive'], ...
-                            'Value', num2str(s.Simulink_EnableReactiveControl));
-                        
-                        % Setup leftLambda block
-                        set_param([modelName '/leftLambda'], ...
-                            'Value', num2str(s.Simulink_LeftLambda));
-
-                        % Setup rightLambda block
-                        set_param([modelName '/rightLambda'], ...
-                            'Value', num2str(s.Simulink_RightLambda));
-
-                        % Setup leftNu block
-                        set_param([modelName '/leftNu'], ...
-                            'Value', num2str(s.Simulink_LeftNu));
-
-                        % Setup rightNu block
-                        set_param([modelName '/rightNu'], ...
-                            'Value', num2str(s.Simulink_RightNu));
-                        
-                        b = true;
-                    otherwise, error('Erroneus lidar');
-                end
-            catch 
-                b = false;
-            end
-        end
+%         function localAddEventListener(this)         
+%             % we need to save the event handlers or the callback won't be
+%             % executed
+%             modelName = this.settings.values.Adquisition_model;
+%             switch modelName
+%                 case 'iWalkerRoboPeakModel'
+%                     this.eh = [ ...
+%                         add_exec_event_listener([modelName '/Sample Time Sync'], ...
+%                         'PostOutputs', @this.sampleTimeSyncEventListener) ...
+%                         
+%                         add_exec_event_listener([modelName '/RPLidar'], ...
+%                         'PostOutputs', @this.rplidarEventListener) ...
+%                         
+%                         add_exec_event_listener([modelName '/High Frequency Odometry'], ...
+%                         'PostOutputs', @this.OdometryListener) ...
+%                         
+%                         add_exec_event_listener([modelName '/iWheels'], ...
+%                         'PostOutputs', @this.iWheelsListener) ...
+%                         ];
+%                     
+%                 case 'iWalkerHokuyoModel'
+%                     this.eh = [ ...
+%                         add_exec_event_listener([modelName '/Sample Time Sync'], ...
+%                         'PostOutputs', @this.sampleTimeSyncEventListener) ...
+%                         
+%                         add_exec_event_listener([modelName '/Hokuyo'], ...
+%                         'PostOutputs', @this.hokuyoEventListener) ...
+%                         
+%                         add_exec_event_listener([modelName '/High Frequency Odometry'], ...
+%                         'PostOutputs', @this.OdometryListener) ...
+%                         
+%                         add_exec_event_listener([modelName '/iWheels'], ...
+%                         'PostOutputs', @this.iWheelsListener) ...
+%                         
+%                         add_exec_event_listener([modelName '/IMU'], ...
+%                         'PostOutputs', @this.IMUListener) ...
+%                         
+%                         add_exec_event_listener([modelName '/FORCES'], ...
+%                         'PostOutputs', @this.FORCESListener) ...
+%                         ];
+%             end
+%         end
+%         
+%         function sampleTimeSyncEventListener(this, rtb, ~)
+%             set(this.info.currentTime, 'string', num2str(rtb.CurrentTime, '%.1f'));
+%         end
+%         
+%         function OdometryListener(this, rtb, ~)
+%             this.sim.stepOdometry(rtb.OutputPort(1).Data);
+%             
+%             t = this.info.table;
+%             t.Data(1,2:4) = {this.sim.rob.x(1), this.sim.rob.x(2), this.sim.rob.x(3)};
+%         end
+%         
+%         function rplidarEventListener(this, rtb, ~)
+%             length = rtb.OutputPort(3).Data;
+%             if length > 0
+%                 range = double(rtb.OutputPort(1).Data(1:length))/1000;
+%                 angle = double(rtb.OutputPort(2).Data(1:length));
+%                 angle = mod(angle+180, 360);
+%             else
+%                 range = 0;
+%                 angle = 0;
+%             end           
+%             this.sim.stepScan(range', angle');
+%             this.redrawScan = true;
+%         end
+%         
+%         function hokuyoEventListener(this, rtb, ~)
+%             range = double(rtb.OutputPort(1).Data)/1000;
+%             angle = ((0.3515625 *((1:682) - 1)) - 120);
+%             this.sim.stepScan(range', angle);
+%             this.redrawScan = true;
+%         end
+%         
+%         function iWheelsListener(this, rtb, ~)
+%             leftDRPM = rtb.OutputPort(1).Data;
+%             rightDRPM = rtb.OutputPort(2).Data;
+%             
+%             t = this.info.table;
+%             t.Data(2,2:3) = {leftDRPM, rightDRPM};
+%         end
+%         
+%         function IMUListener(this, rtb, ~)
+%             accelX = rtb.OutputPort(1).Data;
+%             accelY = rtb.OutputPort(2).Data;
+%             gyroYAW = rtb.OutputPort(3).Data;
+%         end
+%         
+%         function FORCESListener(this, rtb, ~)
+%             leftHandFx = rtb.OutputPort(1).Data;
+%             leftHandFy = rtb.OutputPort(2).Data;
+%             leftHandFz = rtb.OutputPort(3).Data;
+%             leftBrake = rtb.OutputPort(4).Data;
+%             rightHandFx = rtb.OutputPort(5).Data;
+%             rightHandFy = rtb.OutputPort(6).Data;
+%             rightHandFz = rtb.OutputPort(7).Data;
+%             rightBrake = rtb.OutputPort(8).Data;
+%             leftLegF = rtb.OutputPort(9).Data;
+%             rightLefF = rtb.OutputPort(10).Data;
+%         end
         
-        function localAddEventListener(this)         
-            % we need to save the event handlers or the callback won't be
-            % executed
-            modelName = this.settings.values.Simulink_model;
-            switch modelName
-                case 'iWalkerRoboPeakModel'
-                    this.eh = [ ...
-                        add_exec_event_listener([modelName '/Sample Time Sync'], ...
-                        'PostOutputs', @this.sampleTimeSyncEventListener) ...
-                        
-                        add_exec_event_listener([modelName '/RPLidar'], ...
-                        'PostOutputs', @this.rplidarEventListener) ...
-                        
-                        add_exec_event_listener([modelName '/High Frequency Odometry'], ...
-                        'PostOutputs', @this.OdometryListener) ...
-                        
-                        add_exec_event_listener([modelName '/iWheels'], ...
-                        'PostOutputs', @this.iWheelsListener) ...
-                        ];
-                    
-                case 'iWalkerHokuyoModel'
-                    this.eh = [ ...
-                        add_exec_event_listener([modelName '/Sample Time Sync'], ...
-                        'PostOutputs', @this.sampleTimeSyncEventListener) ...
-                        
-                        add_exec_event_listener([modelName '/Hokuyo'], ...
-                        'PostOutputs', @this.hokuyoEventListener) ...
-                        
-                        add_exec_event_listener([modelName '/High Frequency Odometry'], ...
-                        'PostOutputs', @this.OdometryListener) ...
-                        
-                        add_exec_event_listener([modelName '/iWheels'], ...
-                        'PostOutputs', @this.iWheelsListener) ...
-                        
-                        add_exec_event_listener([modelName '/IMU'], ...
-                        'PostOutputs', @this.IMUListener) ...
-                        
-                        add_exec_event_listener([modelName '/FORCES'], ...
-                        'PostOutputs', @this.FORCESListener) ...
-                        ];
-            end
-        end
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        %% Adquisition Management
         
-        function sampleTimeSyncEventListener(this, rtb, ~)
-            set(this.info.currentTime, 'string', num2str(rtb.CurrentTime, '%.1f'));
-        end
-        
-        function OdometryListener(this, rtb, ~)
-            this.sim.stepOdometry(rtb.OutputPort(1).Data);
-            
-            t = this.info.table;
-            t.Data(1,2:4) = {this.sim.rob.x(1), this.sim.rob.x(2), this.sim.rob.x(3)};
-        end
-        
-        function rplidarEventListener(this, rtb, ~)
-            length = rtb.OutputPort(3).Data;
-            if length > 0
-                range = double(rtb.OutputPort(1).Data(1:length))/1000;
-                angle = double(rtb.OutputPort(2).Data(1:length));
-                angle = mod(angle+180, 360);
+        function initAdquisition(this)
+            s = this.settings.values;
+            if strcmp(s.Adquisition_walker, 'iWalkerRoboPeak')
+                this.iwalker = iWalkerRoboPeak();
+                            
+                % Register adquisition listeners
+                this.eh = [ ...
+                    addlistener(this.iwalker, 'canusbReaded', @this.rpcanListner), ...
+                    addlistener(this.iwalker, 'lidarReaded', @this.rplidarListener), ...
+                    ];
             else
-                range = 0;
-                angle = 0;
-            end           
-            this.sim.stepScan(range', angle');
-            this.redrawScan = true;
+                
+            end
         end
         
-        function hokuyoEventListener(this, rtb, ~)
-            range = double(rtb.OutputPort(1).Data)/1000;
-            angle = ((0.3515625 *((1:682) - 1)) - 120);
-            this.sim.stepScan(range', angle);
-            this.redrawScan = true;
+        function checkAdquisition(this)
+            s = this.settings.values;
+            COM = str2double(strrep(s.Adquisition_COM, 'COM', ''));
+            if strcmp(s.Adquisition_walker, 'iWalkerRoboPeak')
+                this.iwalker.setCANUSBSampleTime(s.Adquisition_SampleTimeCAN);
+                this.iwalker.setLidarSampleTime(s.Adquisition_SampleTimeLidar);
+                success = this.iwalker.connect(COM);
+                if ~success.canusb || ~success.lidar
+                    msg1 = '';
+                    msg2 = '';
+                    if ~success.cansub 
+                        msg1 = 'CANUSB: connection failed';
+                    end
+                    if ~success.lidar
+                        msg2 = 'Lidar: connection failed';
+                    end
+                    uiwait(msgbox('Status',{msg1, msg2},'modal'));
+                end
+            else
+                
+            end 
         end
         
-        function iWheelsListener(this, rtb, ~)
-            leftDRPM = rtb.OutputPort(1).Data;
-            rightDRPM = rtb.OutputPort(2).Data;
-            
-            t = this.info.table;
-            t.Data(2,2:3) = {leftDRPM, rightDRPM};
+        function success = startAdquisition(this)
+            s = this.settings.values;
+            COM = str2double(strrep(s.Adquisition_COM, 'COM', ''));
+            if strcmp(s.Adquisition_walker, 'iWalkerRoboPeak')
+                this.iwalker.setCANUSBSampleTime(s.Adquisition_SampleTimeCAN);
+                this.iwalker.setLidarSampleTime(s.Adquisition_SampleTimeLidar);
+                sc = this.iwalker.connect(COM);
+                if ~sc.canusb || ~sc.lidar
+                    msg1 = '';
+                    msg2 = '';
+                    if ~sc.canusb 
+                        msg1 = 'CANUSB: connection failed';
+                    end
+                    if ~sc.lidar
+                        msg2 = 'Lidar: connection failed';
+                    end
+                    answer = questdlg({msg1, msg2, 'Do you want to start anyways?'}, 'Connection problem', 'yes','no','no');
+                    if strcmp(answer, 'no')
+                        success =  false;
+                        return;
+                    end                   
+                    this.iwalker.start();                  
+                    success = true;
+                    return;
+                end
+            else
+                
+                success =  false;
+                return;
+            end 
         end
         
-        function IMUListener(this, rtb, ~)
-            accelX = rtb.OutputPort(1).Data;
-            accelY = rtb.OutputPort(2).Data;
-            gyroYAW = rtb.OutputPort(3).Data;
+        % Listener for CANUSB connected to iWalkerRoboPeak
+        function rpcanListner(this, src, e)
+            try
+                this.setCurrentTime(this.iwalker.time);
+                this.sim.StepOdometry(e.Data.odo);
+                t = this.info.table;
+                t.Data(1,2:4) = {this.sim.rob.x(1), this.sim.rob.x(2), this.sim.rob.x(3)};
+                t.Data(2,2:3) = {e.Data.w(1), e.Data,w(2)};
+            catch
+                disp('Error in rpcanListner!');
+            end
         end
         
-        function FORCESListener(this, rtb, ~)
-            leftHandFx = rtb.OutputPort(1).Data;
-            leftHandFy = rtb.OutputPort(2).Data;
-            leftHandFz = rtb.OutputPort(3).Data;
-            leftBrake = rtb.OutputPort(4).Data;
-            rightHandFx = rtb.OutputPort(5).Data;
-            rightHandFy = rtb.OutputPort(6).Data;
-            rightHandFz = rtb.OutputPort(7).Data;
-            rightBrake = rtb.OutputPort(8).Data;
-            leftLegF = rtb.OutputPort(9).Data;
-            rightLefF = rtb.OutputPort(10).Data;
+        % Listener for RPLidar connected to iWalkerRoboPeak
+        function rplidarListener(this, src, e)
+            try
+                if e.Data.count > 0
+                    range = double(e.Data.range)/1000;
+                    angle = double(e.Data.angle);
+                else
+                    range = 0;
+                    angle = 0;
+                end                
+                this.sim.stepScan(range', angle');
+                this.redrawScan = true;
+            catch
+                disp('Error in rplidarListener!');
+            end
         end
-        
-        
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %% Controls GUI Management
@@ -740,7 +819,7 @@ classdef (Sealed) iWalkerSLAM < handle
             end
         end
         
-        function b = continuaAndDiscard(this)
+        function b = continueAndDiscard(this)
             if ~this.logSaved
                 answer = questdlg('The last log was not saved. Do you want to discard it?', ...
                     'Discard log?', ...
@@ -767,7 +846,7 @@ classdef (Sealed) iWalkerSLAM < handle
                 end
 
                 this.settings.save(fullfile(parentpath(mfilename('fullpath')), 'settings.mat'));
-                bdclose(this.settings.values.Simulink_model);
+%                 bdclose(this.settings.values.Simulink_model);
                 %gui.settings.close()
                 delete(this.fig);
                 delete(this);
@@ -778,9 +857,10 @@ classdef (Sealed) iWalkerSLAM < handle
         
         % Toolbar callbaks %
         function changeMode_Callback(this, ~, ~)
+            s = this.settings.values;
             switch this.state.mode
                 case this.MODE.ONLINE
-                    if this.continuaAndDiscard()
+                    if this.continueAndDiscard()
                         this.setMode(this.MODE.OFFLINE);
                         if isempty(this.dlog)
                             this.setStatus(this.STATUS.LOG_LOAD);
@@ -792,28 +872,22 @@ classdef (Sealed) iWalkerSLAM < handle
                     end
                     
                 case this.MODE.OFFLINE
-                    this.setMode(this.MODE.ONLINE);
-                    if strcmp(this.settings.values.Simulink_COM, '-')
-                        this.setStatus(this.STATUS.IWK_CONNECT);
-                    else
-                        %%this.initModel();
-                        this.setStatus(this.STATUS.BUSY);
-                        modelOK = this.setupModel();
-                        if modelOK
-                            this.setStatus(this.STATUS.IWK_READY);
-                        else
-                            this.setStatus(this.STATUS.IWK_CONNECT);
-                            errordlg('Problem loading simulink model', 'Error');
-                        end  
+                    if ~strcmp(s.Adquisition_walker, 'iWalkerRoboPeak')
+                        errordlg('iWalkerRobHokuyo not implemented', 'Error');
+                        return;
                     end
+                    this.setMode(this.MODE.ONLINE);
+                    
+                    this.setStatus(this.STATUS.BUSY);
+                                       
+                    this.initAdquisition();
+                    this.setStatus(this.STATUS.IWK_READY);
                     set(this.info.endTime, 'string', 'Inf');
+                    
             end
             set(this.info.currentTime, 'string', 0);
         end
         
-        function loadModel_Callback(this, ~, ~)
-            
-        end
         
         function loadLog_Callback(this, ~, ~)
             path = this.settings.values.Log_path;
@@ -827,7 +901,7 @@ classdef (Sealed) iWalkerSLAM < handle
         function stopButton_Callback(this, ~, ~)
             if this.state.mode == this.MODE.ONLINE
                 this.setStatus(this.STATUS.BUSY);
-                set_param( this.settings.values.Simulink_model, 'SimulationCommand', 'stop');
+                this.iwalker.stop();
                 this.setStatus(this.STATUS.IWK_READY);
             else
                 this.setStatus(this.STATUS.BUSY);
@@ -839,17 +913,16 @@ classdef (Sealed) iWalkerSLAM < handle
         
         function playButton_Callback(this, ~, ~)         
             if this.state.mode == this.MODE.ONLINE              
-                if this.continuaAndDiscard()
+                if this.continueAndDiscard()
                     this.setStatus(this.STATUS.BUSY);             
                     %modelOK = this.setupModel();
-                    modelOK = true;
-                    if modelOK
-                        this.initSimulation();
-                        set_param( this.settings.values.Simulink_model, 'SimulationCommand', 'start');
+%                     modelOK = true;
+                    success = this.startAdquisition();
+
+                    if success
                         this.setStatus(this.STATUS.IWK_RUNNING);
                     else
                         this.setStatus(this.STATUS.IWK_READY);
-                        errordlg('Problem starting the model', 'Error');
                     end
                 end
             else
@@ -919,7 +992,7 @@ classdef (Sealed) iWalkerSLAM < handle
         
                 
         function settings_Callback(this, src, ~)
-            if this.state.mode == this.MODE.ONLINE && ~this.continuaAndDiscard()
+            if this.state.mode == this.MODE.ONLINE && ~this.continueAndDiscard()
                 return;
             end
             
@@ -927,31 +1000,27 @@ classdef (Sealed) iWalkerSLAM < handle
             this.initSimulation();
             this.initPlots();
             
-            if this.state.mode == this.MODE.ONLINE
-                if strcmp(this.settings.values.Simulink_COM, '-')
-                    this.setStatus(this.STATUS.IWK_CONNECT);
-                else
-                    this.setStatus(this.STATUS.BUSY);
-                    modelOK = this.setupModel();
-                    if modelOK
-                        this.setStatus(this.STATUS.IWK_READY);
-                    else
-                        this.setStatus(this.STATUS.IWK_CONNECT);
-                        errordlg('Problem starting the model', 'Error');
-                    end                  
-                end
-            end
+%             if this.state.mode == this.MODE.ONLINE
+%                 this.setStatus(this.STATUS.BUSY);
+%                 modelOK = this.setupModel();
+%                 if modelOK
+%                     this.setStatus(this.STATUS.IWK_READY);
+%                 else
+%                     this.setStatus(this.STATUS.IWK_CONNECT);
+%                     errordlg('Problem starting the model', 'Error');
+%                 end                                  
+%             end
         end
         
         function saveLogButton_Callback(this, ~, ~)
             try
                 dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
-                id = this.settings.values.Simulink_count;
+                id = this.settings.values.Adquisition_count;
                 filename = [num2str(id) '_' dstr];
-                pathname = this.settings.values.Simulink_SavePath;
+                pathname = this.settings.values.Adquisition_SavePath;
                 [filename, pathname] =  uiputfile('*.mat', 'Save log', fullfile(pathname, filename));
                 if pathname ~= 0
-                    if strcmp(this.settings.values.Simulink_model, 'iWalkerRoboPeakModel')
+                    if strcmp(this.settings.values.Adquisition_model, 'iWalkerRoboPeakModel')
                         rph = evalin('base','rph');
                         pose = evalin('base','pose');
                         range = evalin('base','range');
@@ -966,8 +1035,8 @@ classdef (Sealed) iWalkerSLAM < handle
                         range = evalin('base', 'range');
                         save(fullfile(pathname, filename), 'drpm', 'pose', 'range', 'imu', 'forces');
                     end
-                    this.settings.values.Simulink_SavePath = pathname;
-                    this.settings.values.Simulink_count = id + 1;
+                    this.settings.values.Adquisition_SavePath = pathname;
+                    this.settings.values.Adquisition_count = id + 1;
                     this.logSaved = true;
                 end
             catch

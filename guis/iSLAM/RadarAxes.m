@@ -52,7 +52,8 @@ classdef RadarAxes < hgsetget
             
             r = ceil(this.radius);
             
-            xlim([-r-0.1 r+0.1]); ylim([-r-0.1 r+0.1]);
+            xlim(this.hAxes,[-r-0.1 r+0.1]); 
+            ylim(this.hAxes,[-r-0.1 r+0.1]);
             hold(this.hAxes, 'on');
             axis(this.hAxes, 'off');
             axis(this.hAxes, 'square');
