@@ -301,9 +301,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             mexErrMsgTxt("Test: Unexpected arguments.");
         
         // Allocate output arrays
+        mexPrintf("URG: allocating output\n");
         plhs[0] = mxCreateDoubleMatrix(1,682,mxREAL);
         double *outRange = mxGetPr(plhs[0]);
-        
+        mexPrintf("URG: calling getScan\n");
         lid->getScan(outRange);
         return;
     }
