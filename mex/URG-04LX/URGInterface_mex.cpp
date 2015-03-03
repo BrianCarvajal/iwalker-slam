@@ -79,8 +79,10 @@ public:
         unsigned char aux[2732];
         int res[682];
         act = 0;
+        mexPrintf("URG: Starting read\n");
         while((readURG(&car, sizeof(car)))==1)
         {
+            mexPrintf("%c", car);
             buf[act] = car;
             act++;
             if ((act>1) && ((buf[act-1] == '\r') || (buf[act-1] == '\n')) &&

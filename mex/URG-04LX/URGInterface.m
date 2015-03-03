@@ -25,7 +25,7 @@ classdef URGInterface < handle
         end
 
         %% GetScan - Get [range] data from the lidar in mm
-        function range = getScan(this, varargin)
+        function range = getScan(this)
             range = URGInterface_mex('getScan', this.objectHandle);
         end
 
