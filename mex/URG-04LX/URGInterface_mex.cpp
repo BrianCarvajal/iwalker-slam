@@ -163,7 +163,7 @@ private:
         }
         else
         {
-            if (verbose) mexPrintf( "URG: %d bytes written\n", dwBytesWritten);
+            //if (verbose) mexPrintf( "URG: %d bytes written\n", dwBytesWritten);
         }
         return dwBytesWritten;
     }
