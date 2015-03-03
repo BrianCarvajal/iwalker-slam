@@ -79,10 +79,8 @@ public:
         unsigned char aux[2732];
         int res[682];
         act = 0;
-        mexPrintf("URG: Starting read\n");
         while((readURG(&car, sizeof(car)))==1)
         {
-            mexPrintf("%c", car);
             buf[act] = car;
             act++;
             if ((act>1) && ((buf[act-1] == '\r') || (buf[act-1] == '\n')) &&
@@ -240,9 +238,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     char cmd[64];
     if (nrhs < 1 || mxGetString(prhs[0], cmd, sizeof(cmd)))
         mexErrMsgTxt("First input should be a command string less than 64 characters long.");
-    
-    mexPrintf("URG: commmand [%s]\n", cmd);
-    
+       
     // New
     if (!strcmp("new", cmd)) {
         // Check parameters
@@ -287,10 +283,9 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (!strcmp("disconnect", cmd))
     {
         // Check parameters
-        if (nlhs != 1 || nrhs != 3)
+        if (nlhs != 1 || nrhs != 2)
             mexErrMsgTxt("Disconnect: Unexpected arguments.");
         
-        int port = (int)mxGetScalar(prhs[2]);
         plhs[0]=  mxCreateLogicalScalar(lid->disconnect());
         return;
     }
@@ -303,10 +298,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
             mexErrMsgTxt("Test: Unexpected arguments.");
         
         // Allocate output arrays
-        mexPrintf("URG: allocating output\n");
         plhs[0] = mxCreateDoubleMatrix(1,682,mxREAL);
         double *outRange = mxGetPr(plhs[0]);
-        mexPrintf("URG: calling getScan\n");
         lid->getScan(outRange);
         return;
     }
