@@ -271,7 +271,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (!strcmp("connect", cmd))
     {
         // Check parameters
-        if (nlhs != 0 || nrhs != 3)
+        if (nlhs != 1 || nrhs != 3)
             mexErrMsgTxt("Connect: Unexpected arguments.");
         
         int port = (int)mxGetScalar(prhs[2]);
@@ -283,7 +283,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (!strcmp("connect", cmd))
     {
         // Check parameters
-        if (nlhs != 0 || nrhs != 3)
+        if (nlhs != 1 || nrhs != 3)
             mexErrMsgTxt("Disconnect: Unexpected arguments.");
         
         int port = (int)mxGetScalar(prhs[2]);
