@@ -178,7 +178,7 @@ private:
         }
         else
         {
-            if (verbose) printf("URG: read OK\n");
+            //if (verbose) printf("URG: read OK\n");
         }
         if (aux > 0)
         {
