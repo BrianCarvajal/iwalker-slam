@@ -46,13 +46,13 @@ classdef iWalkerRoboPeak < iWalkerInterface
             ldata = double(this.canusb.read(768));
             rdata = double(this.canusb.read(769));
             
-            x =     data(1)*256 + data(2);
-            y =     data(3)*256 + data(4);
-            th =    data(7)*256 + data(8);
-            pose = [x y th]/1000;
+            x =     iWalkerInterface.bytes2double(data(1),data(2));
+            y =     iWalkerInterface.bytes2double(data(3),data(4));
+            th =    iWalkerInterface.bytes2double(data(7),data(8));
+            pose = [x y th]/1000; % mm to m
             
-            w(1) = ldata(1)*256 + ldata(2);
-            w(2) = rdata(1)*256 + rdata(2);
+            w(1) = iWalkerInterface.bytes2double(ldata(1),ldata(2));
+            w(2) = iWalkerInterface.bytes2double(rdata(1),rdata(2));
             
             w = w/94.7; % mm/s to rad/s
             

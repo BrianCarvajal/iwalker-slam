@@ -88,5 +88,11 @@ classdef iWalkerInterface < hgsetget
         end
     end
     
+    methods (Static, Access = protected)
+        function n = bytes2double(msB, lsB)
+            n = double(typecast(uint8([lsB msB]), 'int16'));
+        end
+    end
+    
 end
 

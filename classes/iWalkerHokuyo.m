@@ -25,7 +25,7 @@ classdef iWalkerHokuyo < iWalkerInterface
            this.log.odo.DataInfo.Units = 'm | rad';
            
            this.log.imu = timeseries();
-           this.log.imu.Name = 'IMU: [accelX | accelY | gyroYaw]';
+           this.log.imu.Name = 'IMU: [accelX | accelY | gyroPsi]';
            this.log.imu.DataInfo.Units = 'mm/s^2 | mm/s^2 | º/s';
            
            this.log.forces = timeseries();
@@ -76,31 +76,31 @@ classdef iWalkerHokuyo < iWalkerInterface
         
         
         function imu = readIMU(this)
-            data = double(this.canusb.read(768));
-            imu.accX = data(1)*256 + data(2);
-            imu.accY = data(3)*256 + data(4);
-            imu.gyrYaw = data(5)*256 + data(6);
+            data = this.canusb.read(768);
+            imu.accX = iWalkerInterface.bytes2double(data(1),data(2));
+            imu.accY = iWalkerInterface.bytes2double(data(3),data(4));
+            imu.gyrPsi = iWalkerInterface.bytes2double(data(5),data(6));
         end
         
         function forces = readForces(this)
-            data1 = double(this.canusb.read(1024));
-            data2 = double(this.canusb.read(1056));
-            data3 = double(this.canusb.read(512));
-            data4 = double(this.canusb.read(544));
+            data1 = this.canusb.read(1024);
+            data2 = this.canusb.read(1056);
+            data3 = this.canusb.read(512);
+            data4 = this.canusb.read(544);
             
-            forces.leftHandX = data1(1)*256 + data1(2);
-            forces.leftHandY = data1(3)*256 + data1(4);
-            forces.leftHandZ = data1(5)*256 + data1(6);
-            forces.leftHandBrake = data1(8);
+            forces.leftHandX = iWalkerInterface.bytes2double(data1(1),data1(2));
+            forces.leftHandY = iWalkerInterface.bytes2double(data1(3),data1(4));
+            forces.leftHandZ = iWalkerInterface.bytes2double(data1(5),data1(6));
+            forces.leftHandBrake = double(data1(8));
            
-            forces.rightHandX = data2(1)*256 + data2(2);
-            forces.rightHandY = data2(3)*256 + data2(4);
-            forces.rightHandZ = data2(5)*256 + data2(6);
+            forces.rightHandX = iWalkerInterface.bytes2double(data2(1),data2(2));
+            forces.rightHandY = iWalkerInterface.bytes2double(data2(3),data2(4));
+            forces.rightHandZ = iWalkerInterface.bytes2double(data2(5),data2(6));
             forces.rightHandBrake = data2(8);
             
-            forces.leftLeg = data3(1)*256 + data3(2);
+            forces.leftLeg = iWalkerInterface.bytes2double(data3(1),data3(2));
             
-            forces.rightLeg = data4(1)*256 + data4(2); 
+            forces.rightLeg = iWalkerInterface.bytes2double(data4(1),data4(2));
         end
         
         function writeReactive(this, lLambda, rLambda, lNu, rNu)
