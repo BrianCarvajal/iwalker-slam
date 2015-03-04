@@ -135,7 +135,7 @@ classdef iWalkerHokuyo < iWalkerInterface
             this.log.odo = this.log.odo.addsample('Time', timestamp, 'Data', d.odo);
             this.log.rps = this.log.rps.addsample('Time', timestamp, 'Data', d.rps);
             this.log.imu = this.log.rps.addsample('Time', timestamp, 'Data', struct2array(d.imu));
-            this.log.forces = this.log.rps.addsample('Time', timestamp, 'Data', d.forces));
+            this.log.forces = this.log.rps.addsample('Time', timestamp, 'Data', struct2array(d.forces));
         end
         
      end
