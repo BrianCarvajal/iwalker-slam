@@ -12,6 +12,8 @@ classdef iWalkerHokuyo < iWalkerInterface
         end       
         
         function initLog(this)
+           this.log.type = 'iWalkerHokuyo';
+            
            this.log.pose = timeseries();
            this.log.pose.Name = 'iWalker Pose: [x | y | theta]';
            this.log.pose.DataInfo.Units = 'm';

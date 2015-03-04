@@ -12,6 +12,8 @@ classdef iWalkerRoboPeak < iWalkerInterface
         end
                  
         function initLog(this)
+           this.log.type = 'iWalkerRoboPeak';
+            
            this.log.pose = timeseries();
            this.log.pose.Name = 'iWalker Pose';
            this.log.pose.DataInfo.Units = 'm';

@@ -518,8 +518,6 @@ classdef (Sealed) iWalkerSLAM < handle
                 this.iwalker.start();
                 success = true;
                 return;
-
-             
         end
         
         % Listener for CANUSB connected to iWalkerRoboPeak
@@ -745,11 +743,10 @@ classdef (Sealed) iWalkerSLAM < handle
 %                     modelOK = true;
                     this.sim.settings.Rob.dt = s.Adquisition_SampleTimeCAN;
                     this.initSimulation();
+                    this.setStatus(this.STATUS.IWK_RUNNING);
                     success = this.startAdquisition();
 
-                    if success
-                        this.setStatus(this.STATUS.IWK_RUNNING);
-                    else
+                    if ~success
                         this.setStatus(this.STATUS.IWK_READY);
                     end
                 end
@@ -827,27 +824,30 @@ classdef (Sealed) iWalkerSLAM < handle
         
         function saveLogButton_Callback(this, ~, ~)
             try
+                s = this.settings.values;
                 dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
                 id = this.settings.values.Adquisition_count;
                 filename = [num2str(id) '_' dstr];
                 pathname = this.settings.values.Adquisition_SavePath;
                 [filename, pathname] =  uiputfile('*.mat', 'Save log', fullfile(pathname, filename));
                 if pathname ~= 0
-                    if strcmp(this.settings.values.Adquisition_model, 'iWalkerRoboPeakModel')
-                        rph = evalin('base','rph');
-                        pose = evalin('base','pose');
-                        range = evalin('base','range');
-                        angle = evalin('base','angle');
-                        count = evalin('base','count');
-                        save(fullfile(pathname, filename), 'rph', 'pose', 'range', 'angle', 'count');
-                    else
-                        drpm = evalin('base', 'drpm');
-                        pose = evalin('base', 'pose');
-                        imu = evalin('base', 'imu');
-                        forces = evalin('base', 'forces');
-                        range = evalin('base', 'range');
-                        save(fullfile(pathname, filename), 'drpm', 'pose', 'range', 'imu', 'forces');
-                    end
+%                     if strcmp(s.Adquisition_walker, 'iWalkerRoboPeak')
+%                         rps = this.walker.log.rps;
+%                         pose = evalin('base','pose');
+%                         range = evalin('base','range');
+%                         angle = evalin('base','angle');
+%                         count = evalin('base','count');
+%                         save(fullfile(pathname, filename), 'rph', 'pose', 'range', 'angle', 'count');
+%                     else
+%                         drpm = evalin('base', 'drpm');
+%                         pose = evalin('base', 'pose');
+%                         imu = evalin('base', 'imu');
+%                         forces = evalin('base', 'forces');
+%                         range = evalin('base', 'range');
+%                         save(fullfile(pathname, filename), 'drpm', 'pose', 'range', 'imu', 'forces');
+%                     end
+                    saver = matfile(fullfile(pathname, filename),'Writable',true);
+                    saver.log = this.iwalker.log;
                     this.settings.values.Adquisition_SavePath = pathname;
                     this.settings.values.Adquisition_count = id + 1;
                     this.logSaved = true;
