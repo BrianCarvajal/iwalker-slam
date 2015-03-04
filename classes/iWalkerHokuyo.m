@@ -42,17 +42,17 @@ classdef iWalkerHokuyo < iWalkerInterface
         end             
         
         function [pose, odo, w] = readWheels(this)
-            data = double(this.canusb.read(290));
-            ldata = double(this.canusb.read(256));
-            rdata = double(this.canusb.read(288));
+            data = this.canusb.read(290);
+            ldata = this.canusb.read(256);
+            rdata = this.canusb.read(288);
             
-            x =     data(1)*256 + data(2);
-            y =     data(3)*256 + data(4);
-            th =    data(7)*256 + data(8);
+            x =     iWalkerInterface.bytes2double(data(1),data(2));
+            y =     iWalkerInterface.bytes2double(data(3),data(4));
+            th =    iWalkerInterface.bytes2double(data(7),data(8));
             pose = [x y th]/1000; % mm to m
             
-            w(1) = ldata(1)*256 + ldata(2);
-            w(2) = rdata(1)*256 + rdata(2);
+            w(1) = iWalkerInterface.bytes2double(ldata(1),ldata(2));
+            w(2) = iWalkerInterface.bytes2double(rdata(1),rdata(2));
             
             w = w*((2*pi)/600); %drpm to rad/s
             
@@ -96,7 +96,7 @@ classdef iWalkerHokuyo < iWalkerInterface
             forces.rightHandX = iWalkerInterface.bytes2double(data2(1),data2(2));
             forces.rightHandY = iWalkerInterface.bytes2double(data2(3),data2(4));
             forces.rightHandZ = iWalkerInterface.bytes2double(data2(5),data2(6));
-            forces.rightHandBrake = data2(8);
+            forces.rightHandBrake = double(data2(8));
             
             forces.leftLeg = iWalkerInterface.bytes2double(data3(1),data3(2));
             
