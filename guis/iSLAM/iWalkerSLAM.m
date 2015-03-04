@@ -525,9 +525,6 @@ classdef (Sealed) iWalkerSLAM < handle
         % Listener for CANUSB connected to iWalkerRoboPeak
         function rpcanListner(this, src, e)
             try
-                if e.Data.odo(1) ~= 0
-                   x = 1; 
-                end
                 this.setCurrentTime(this.iwalker.time);
                 this.sim.stepOdometry(e.Data.odo);
                 t = this.info.table;
@@ -559,9 +556,6 @@ classdef (Sealed) iWalkerSLAM < handle
            try
                 this.setCurrentTime(this.iwalker.time);
                 this.sim.stepOdometry(e.Data.odo);
-                t = this.info.table;
-                t.Data(1,2:4) = {this.sim.rob.x(1), this.sim.rob.x(2), this.sim.rob.x(3)};
-                t.Data(2,2:3) = {e.Data.w(1), e.Data.w(2)};
             catch
                 disp('Error in hokuyocanListner!');
             end
@@ -569,13 +563,8 @@ classdef (Sealed) iWalkerSLAM < handle
         
         function hokuyolidarListener(this, src, e)
             try
-                if e.Data.count > 0
-                    range = double(e.Data.range)/1000;
-                    angle = double(e.Data.angle);
-                else
-                    range = 0;
-                    angle = 0;
-                end                
+                range = double(e.Data.range)/1000;
+                angle = double(e.Data.angle);
                 this.sim.stepScan(range, angle);
                 this.redrawScan = true;
             catch
