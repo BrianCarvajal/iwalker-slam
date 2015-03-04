@@ -31,15 +31,18 @@ public:
     
     ~rplidarmex()
     {
-        if (drv) {
-            drv->disconnect();
-            RPlidarDriver::DisposeDriver(drv);
-        }
+        disconnect();
         mexPrintf( "RPLIDAR: desconectado con éxito.\n");
     }
     
     bool connect(int COMnumber)
     {
+        if (drv && drv->isConnected())
+        {
+            mexPrintf("RPLIDAR: already connected!\n");
+            return true;
+        }
+        
         mexPrintf("RPLIDAR: inicializando driver RPLIDAR en COM%d...\n", COMnumber);
         mexPrintf("Connecting to COM%d\n", COMnumber);
         
@@ -101,6 +104,16 @@ public:
         mexPrintf(" (errorcode: %d)\n", healthinfo.error_code);
         
         drv->startScan();
+        return true;
+    }
+    
+    bool disconnect()
+    {
+        if (drv) {
+            drv->disconnect();
+            RPlidarDriver::DisposeDriver(drv);
+            drv = NULL;
+        }
         return true;
     }
     
@@ -196,6 +209,17 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         
         int port = (int)mxGetScalar(prhs[2]);
         plhs[0]=  mxCreateLogicalScalar(rpl->connect(port));
+        return;
+    }
+    
+    //Disonnect
+    if (!strcmp("disconnect", cmd))
+    {
+        // Check parameters
+        if (nlhs > 1 || nrhs != 2)
+            mexErrMsgTxt("Connect: Unexpected arguments.");
+        
+        plhs[0]=  mxCreateLogicalScalar(rpl->disconnect());
         return;
     }
     
