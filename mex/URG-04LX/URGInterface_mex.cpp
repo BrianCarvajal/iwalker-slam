@@ -14,6 +14,7 @@ public:
     urg()
     {
         verbose = true;
+        hCom = NULL;
     }
     
     ~urg()
@@ -23,6 +24,12 @@ public:
     
     bool connect(int COMnumber)
     {
+        if (hCom != NULL)
+        {
+            mexPrintf("URG: already connected!\n");
+            return true;
+        }
+        
         char portString[20];
         if (verbose)
             mexPrintf("URG: inicializando URG en COM%d...\n", COMnumber);
@@ -41,6 +48,7 @@ public:
         if (hCom == INVALID_HANDLE_VALUE)
         {
             if (verbose) mexPrintf("URG: Error opening Port\n");
+            hCom = NULL;
             return false;
         }
         
@@ -67,7 +75,15 @@ public:
     
     bool disconnect()
     {
-        CloseHandle(hCom);
+        if (hCom != NULL) 
+        {
+            CloseHandle(hCom);
+            mexPrintf("URG: Closed!\n");
+        }
+        else 
+        {
+             mexPrintf("URG: already closed!\n");
+        }            
         return true;
     }
     

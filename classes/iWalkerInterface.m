@@ -78,13 +78,13 @@ classdef iWalkerInterface < hgsetget
         end
         
         function success = connect(this, COM)
-            success.lidar = this.lidar.connect(COM);
             success.canusb = this.canusb.connect();
+            success.lidar = this.lidar.connect(COM);
         end
         
         function success = disconnect(this)
-            success.lidar = this.lidar.disconnect();
             success.canusb = this.canusb.disconnect();
+            success.lidar = this.lidar.disconnect();
         end
     end
     
