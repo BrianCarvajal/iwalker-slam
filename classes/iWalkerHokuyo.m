@@ -113,31 +113,40 @@ classdef iWalkerHokuyo < iWalkerInterface
         end
         
         function lidar_callback(this, t, ~)
-            this.time = toc;
-            d = [];
-            d.range = this.lidar.getScan();
-            d.angle = ((0.3515625 *((1:682) - 1)) - 120);
-            notify(this, 'lidarReaded', iWalkerEventData(d));
-            
-            this.log.range = this.log.range.addsample('Time', timestamp, 'Data', d.range);
-            this.log.angle = this.log.angle.addsample('Time', timestamp, 'Data', d.angle);
+            try
+                timestamp = toc;
+                this.time = timestamp;
+                d = [];
+                d.range = this.lidar.getScan();
+                d.angle = ((0.3515625 *((1:682) - 1)) - 120);
+                notify(this, 'lidarReaded', iWalkerEventData(d));
+
+                this.log.range = this.log.range.addsample('Time', timestamp, 'Data', d.range);
+                this.log.angle = this.log.angle.addsample('Time', timestamp, 'Data', d.angle);
+            catch
+                
+            end
         end
         
         function canusb_callback(this, t, ~)
-            this.time = toc;
-            d = [];
-            [d.pose, d.odo, d.rps] = this.readWheels();
-            d.imu = this.readIMU();
-            d.forces = this.readForces();
-            notify(this, 'canusbReaded', iWalkerEventData(d));
-                       
-            this.log.pose = this.log.pose.addsample('Time', timestamp, 'Data', d.pose);
-            this.log.odo = this.log.odo.addsample('Time', timestamp, 'Data', d.odo);
-            this.log.rps = this.log.rps.addsample('Time', timestamp, 'Data', d.rps);
-            this.log.imu = this.log.rps.addsample('Time', timestamp, 'Data', struct2array(d.imu));
-            this.log.forces = this.log.rps.addsample('Time', timestamp, 'Data', struct2array(d.forces));
+            try
+                timestamp = toc;
+                this.time = timestamp;
+                d = [];
+                [d.pose, d.odo, d.rps] = this.readWheels();
+                d.imu = this.readIMU();
+                d.forces = this.readForces();
+                notify(this, 'canusbReaded', iWalkerEventData(d));
+
+                this.log.pose = this.log.pose.addsample('Time', timestamp, 'Data', d.pose);
+                this.log.odo = this.log.odo.addsample('Time', timestamp, 'Data', d.odo);
+                this.log.rps = this.log.rps.addsample('Time', timestamp, 'Data', d.rps);
+                this.log.imu = this.log.rps.addsample('Time', timestamp, 'Data', struct2array(d.imu));
+                this.log.forces = this.log.rps.addsample('Time', timestamp, 'Data', struct2array(d.forces));
+            catch
+                
+            end
         end
-        
      end
     
 end
