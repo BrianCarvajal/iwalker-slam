@@ -689,14 +689,20 @@ classdef (Sealed) iWalkerSLAM < handle
         end
         
         function connect_Callback(this, ~, ~)
-            if this.state.status == this.STATUS.IWK_CONNECT
+            status = this.state.status;
+            this.setStatus(this.STATUS.BUSY);
+            if status == this.STATUS.IWK_CONNECT
                 if this.iWalkerConnect()               
                     this.setStatus(this.STATUS.IWK_READY);
+                else
+                    this.setStatus(this.STATUS.IWK_CONNECT);
                 end
-            elseif this.state.status == this.STATUS.IWK_READY
+            elseif status == this.STATUS.IWK_READY
                 if this.continueAndDiscard()
                     if this.iWalkerDisconnect()
-                        this.setStatus(this.STATUS.IWK_CONNECT);
+                        this.setStatus(this.STATUS.IWK_CONNECT);                 
+                    else
+                        this.setStatus(this.STATUS.IWK_READY);
                     end
                 end
             end
