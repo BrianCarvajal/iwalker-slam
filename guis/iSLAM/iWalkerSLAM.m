@@ -13,17 +13,15 @@ classdef (Sealed) iWalkerSLAM < handle
     properties (Constant)
         %% Enumerations (native enumerations matlab's are crap)
         STATUS = struct(...
-            'STARTING',     1, ...
-            'LOG_LOAD',     2, ...
-            'LOG_READY',    3, ...
-            'LOG_RUNNING',  4, ...
-            'LOG_PAUSED',   5, ...
-            'LOG_STOPING',  6, ...
-            'IWK_CONNECT',  7, ...
-            'IWK_READY',    8, ...
-            'IWK_RUNNING',  9, ...
-            'IWK_STOPING',  10, ...
-            'BUSY',         11);
+            'STARTING',             1, ...
+            'LOG_LOAD',             2, ...
+            'LOG_READY',            3, ...
+            'LOG_RUNNING',          4, ...
+            'LOG_PAUSED',           5, ...
+            'IWK_NOT_CONNECTED',    6, ...
+            'IWK_CONNECTED',        7, ...
+            'IWK_RUNNING',          8, ...
+            'BUSY',                 9);
         
         MODE =   struct(...
             'ONLINE',   1, ...
@@ -355,7 +353,7 @@ classdef (Sealed) iWalkerSLAM < handle
                     set(this.toolbar.stepButton, 'enable', 'on');
                     set(this.toolbar.zoomIn, 'enable', 'on');
                     
-                case this.STATUS.IWK_CONNECT
+                case this.STATUS.IWK_NOT_CONNECTED
                     set(this.info.status, ...
                         'string', 'Connect the lidar', ...
                         'backgroundcolor', this.COLOR.UNREADY);
@@ -365,7 +363,7 @@ classdef (Sealed) iWalkerSLAM < handle
                     set(this.toolbar.connect, 'CData', this.icons.connect);
                     set(this.toolbar.zoomIn, 'enable', 'on');
                                       
-                case this.STATUS.IWK_READY
+                case this.STATUS.IWK_CONNECTED
                     set(this.info.status, ...
                         'string', 'Ready', ...
                         'backgroundcolor', this.COLOR.READY);
@@ -665,7 +663,7 @@ classdef (Sealed) iWalkerSLAM < handle
                 case this.MODE.ONLINE
                     if this.continueAndDiscard()
                         
-                        if this.state.status == this.STATUS.IWK_READY
+                        if this.state.status == this.STATUS.IWK_CONNECTED
                             this.iWalkerDisconnect();
                         end
                         
@@ -682,7 +680,7 @@ classdef (Sealed) iWalkerSLAM < handle
                 case this.MODE.OFFLINE
                     this.iWalkerInit();
                     this.setMode(this.MODE.ONLINE);
-                    this.setStatus(this.STATUS.IWK_CONNECT);
+                    this.setStatus(this.STATUS.IWK_NOT_CONNECTED);
                     set(this.info.endTime, 'string', 'Inf');                   
             end
             set(this.info.currentTime, 'string', 0);
@@ -691,18 +689,18 @@ classdef (Sealed) iWalkerSLAM < handle
         function connect_Callback(this, ~, ~)
             status = this.state.status;
             this.setStatus(this.STATUS.BUSY);
-            if status == this.STATUS.IWK_CONNECT
+            if status == this.STATUS.IWK_NOT_CONNECTED
                 if this.iWalkerConnect()               
-                    this.setStatus(this.STATUS.IWK_READY);
+                    this.setStatus(this.STATUS.IWK_CONNECTED);
                 else
-                    this.setStatus(this.STATUS.IWK_CONNECT);
+                    this.setStatus(this.STATUS.IWK_NOT_CONNECTED);
                 end
-            elseif status == this.STATUS.IWK_READY
+            elseif status == this.STATUS.IWK_CONNECTED
                 if this.continueAndDiscard()
                     if this.iWalkerDisconnect()
-                        this.setStatus(this.STATUS.IWK_CONNECT);                 
+                        this.setStatus(this.STATUS.IWK_NOT_CONNECTED);                 
                     else
-                        this.setStatus(this.STATUS.IWK_READY);
+                        this.setStatus(this.STATUS.IWK_CONNECTED);
                     end
                 end
             end
@@ -723,7 +721,7 @@ classdef (Sealed) iWalkerSLAM < handle
             if this.state.mode == this.MODE.ONLINE
                 this.setStatus(this.STATUS.BUSY);
                 this.iwalker.stop();
-                this.setStatus(this.STATUS.IWK_READY);
+                this.setStatus(this.STATUS.IWK_CONNECTED);
             else
                 this.setStatus(this.STATUS.BUSY);
                 stop(this.timers.simlog);
@@ -760,7 +758,7 @@ classdef (Sealed) iWalkerSLAM < handle
                         start(this.timers.simlog);
                         this.setStatus(this.STATUS.LOG_RUNNING);
                         
-                    case this.STATUS.IWK_READY
+                    case this.STATUS.IWK_CONNECTED
                         this.setStatus(this.STATUS.IWK_RUNNING);
                 end
             end
