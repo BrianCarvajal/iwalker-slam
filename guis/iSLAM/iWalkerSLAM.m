@@ -81,6 +81,8 @@ classdef (Sealed) iWalkerSLAM < handle
             this.icons.zoomOut = iconRead('zoomOut.png');
             this.icons.settings = iconRead('gear.png');
             this.icons.saveLog = iconRead('save.png');
+            this.icons.connect = iconRead('plug-disconnect.png');
+            this.icons.disconnect = iconRead('plug-connect.png');
             
             % Initialize state
             this.state.mode = this.MODE.ONLINE;
@@ -192,12 +194,13 @@ classdef (Sealed) iWalkerSLAM < handle
                 'TooltipString','Load a datalog',...
                 'HandleVisibility','off', ...
                 'ClickedCallback', @this.loadLog_Callback);
-%             % Load log button
-%             this.toolbar.simulink = uipushtool(this.toolbar.bar, ...
-%                 'CData', this.icons.simulink,...
-%                 'TooltipString','Open simulink model',...
-%                 'HandleVisibility','off', ...
-%                 'ClickedCallback', @this.loadModel_Callback);
+            
+            % Connect iwalker button
+            this.toolbar.connect = uipushtool(this.toolbar.bar, ...
+                'CData', this.icons.connect,...
+                'TooltipString','Connect iWalker',...
+                'HandleVisibility','off', ...
+                'ClickedCallback', @this.connect_Callback);
             
             % Zoom button
             this.toolbar.zoomIn = uitoggletool(this.toolbar.bar, ...
@@ -311,12 +314,12 @@ classdef (Sealed) iWalkerSLAM < handle
         function setStatus(this, status)
             this.state.status = status;
             set(this.fig, 'Pointer','arrow');
+            this.disableToolbar();
             switch status
                 case this.STATUS.LOG_LOAD
                     set(this.info.status, ...
                         'string', 'Load a datalog', ...
-                        'backgroundcolor', this.COLOR.UNREADY);
-                    this.disableToolbar();
+                        'backgroundcolor', this.COLOR.UNREADY);   
                     set(this.toolbar.loadLog, 'enable', 'on');
                     set(this.toolbar.settings, 'enable', 'on');
                     set(this.toolbar.mode, 'enable', 'on');
@@ -325,7 +328,6 @@ classdef (Sealed) iWalkerSLAM < handle
                     set(this.info.status, ...
                         'string', 'Ready', ...
                         'backgroundcolor', this.COLOR.READY);
-                    this.disableToolbar();
                     set(this.toolbar.playButton, 'enable', 'on');
                     set(this.toolbar.stepButton, 'enable', 'on');
                     set(this.toolbar.mode, 'enable', 'on');
@@ -339,7 +341,6 @@ classdef (Sealed) iWalkerSLAM < handle
                         'string', 'Running', ...
                         'backgroundcolor', this.COLOR.RUNNING);
                     set(this.toolbar.playButton, 'CData', this.icons.pause);
-                    this.disableToolbar();
                     set(this.toolbar.playButton, 'enable', 'on');
                     set(this.toolbar.stopButton, 'enable', 'on');
                     
@@ -348,7 +349,6 @@ classdef (Sealed) iWalkerSLAM < handle
                     set(this.info.status, ...
                         'string', 'Paused', ...
                         'backgroundcolor', this.COLOR.READY);
-                    this.disableToolbar();
                     set(this.toolbar.playButton, 'CData', this.icons.play);
                     set(this.toolbar.playButton, 'enable', 'on');
                     set(this.toolbar.stopButton, 'enable', 'on');
@@ -359,27 +359,26 @@ classdef (Sealed) iWalkerSLAM < handle
                     set(this.info.status, ...
                         'string', 'Connect the lidar', ...
                         'backgroundcolor', this.COLOR.UNREADY);
-                    this.disableToolbar();
                     set(this.toolbar.settings, 'enable', 'on');
                     set(this.toolbar.mode, 'enable', 'on');
-%                     set(this.toolbar.simulink, 'enable', 'on');
+                    set(this.toolbar.connect, 'enable', 'on');
+                    set(this.toolbar.connect, 'CData', this.icons.connect);
                     set(this.toolbar.zoomIn, 'enable', 'on');
-                    
+                                      
                 case this.STATUS.IWK_READY
                     set(this.info.status, ...
                         'string', 'Ready', ...
                         'backgroundcolor', this.COLOR.READY);
                     set(this.toolbar.playButton, 'enable', 'on');   
-                    set(this.toolbar.mode, 'enable', 'on');
-                    set(this.toolbar.settings, 'enable', 'on');
-%                     set(this.toolbar.simulink, 'enable', 'on');
+                    set(this.toolbar.connect, 'enable', 'on');
+                    set(this.toolbar.connect, 'CData', this.icons.disconnect);
                     set(this.toolbar.saveLogButton, 'enable', 'on');
                     
                 case this.STATUS.IWK_RUNNING
                     set(this.info.status, ...
                         'string', 'Running', ...
                         'backgroundcolor', this.COLOR.RUNNING);
-                    this.disableToolbar();
+                    
                     set(this.toolbar.stopButton, 'enable', 'on');
                     
                     this.logSaved = false;
@@ -388,7 +387,6 @@ classdef (Sealed) iWalkerSLAM < handle
                     set(this.info.status, ...
                         'string', 'Busy...', ...
                         'backgroundcolor', this.COLOR.UNREADY);
-                    this.disableToolbar();
                     set(this.toolbar.playButton, 'CData', this.icons.play);
                     set(this.fig, 'Pointer','watch');
                 otherwise
@@ -400,7 +398,7 @@ classdef (Sealed) iWalkerSLAM < handle
             set(this.toolbar.settings, 'enable', 'off');
             set(this.toolbar.mode, 'enable', 'off');
             set(this.toolbar.loadLog, 'enable', 'off');
-%             set(this.toolbar.simulink, 'enable', 'off');
+            set(this.toolbar.connect, 'enable', 'off');
             set(this.toolbar.zoomIn, 'enable', 'off');
             set(this.toolbar.stopButton, 'enable', 'off');
             set(this.toolbar.playButton, 'enable', 'off');
@@ -417,9 +415,10 @@ classdef (Sealed) iWalkerSLAM < handle
                         'TooltipString','Swap source to iWalker');
                     set(this.info.mode, 'string', 'Datalog');
                     set(this.toolbar.loadLog, 'visible', 'on');
-%                     set(this.toolbar.simulink, 'visible', 'off');
+                    set(this.toolbar.connect, 'visible', 'off');
                     set(this.toolbar.stepButton, 'visible', 'on');
                     set(this.toolbar.saveLogButton, 'visible', 'off');
+                    set(this.toolbar.zoomIn, 'visible', 'off');
                 case this.MODE.ONLINE;
                     this.state.mode = mode;
                     set(this.toolbar.mode, ...
@@ -427,10 +426,10 @@ classdef (Sealed) iWalkerSLAM < handle
                         'TooltipString','Swap source to Log');
                     set(this.info.mode, 'string', 'iWalker');
                     set(this.toolbar.loadLog, 'visible', 'off');
-%                     set(this.toolbar.simulink, 'visible', 'on');
+                     set(this.toolbar.connect, 'visible', 'on');
                     set(this.toolbar.stepButton, 'visible', 'off');
                     set(this.toolbar.saveLogButton, 'visible', 'on');
-                    set(this.toolbar.saveLogButton, 'enable', 'off');
+                    set(this.toolbar.zoomIn, 'visible', 'off');
                 otherwise
                     error('Erroneus mode');
             end
@@ -440,7 +439,7 @@ classdef (Sealed) iWalkerSLAM < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %% Adquisition Management
         
-        function initAdquisition(this)
+        function iWalkerInit(this)
             s = this.settings.values;
             if strcmp(s.Adquisition_walker, 'iWalkerRoboPeak')
                 this.iwalker = iWalkerRoboPeak();
@@ -461,63 +460,38 @@ classdef (Sealed) iWalkerSLAM < handle
             end
         end
         
-        function checkAdquisition(this)
-%             s = this.settings.values;
-%             COM = str2double(strrep(s.Adquisition_COM, 'COM', ''));
-%             if strcmp(s.Adquisition_walker, 'iWalkerRoboPeak')
-%                 this.iwalker.setCANUSBSampleTime(s.Adquisition_SampleTimeCAN);
-%                 this.iwalker.setLidarSampleTime(s.Adquisition_SampleTimeLidar);
-%                 success = this.iwalker.connect(COM);
-%                 if ~success.canusb || ~success.lidar
-%                     msg1 = '';
-%                     msg2 = '';
-%                     if ~success.cansub 
-%                         msg1 = 'CANUSB: connection failed';
-%                     end
-%                     if ~success.lidar
-%                         msg2 = 'Lidar: connection failed';
-%                     end
-%                     uiwait(msgbox('Status',{msg1, msg2},'modal'));
-%                 end
-%             else
-%                 
-%             end 
+        function success = iWalkerConnect(this)          
+            s = this.settings.values;
+            this.settings.values.Rob_dt = s.Adquisition_SampleTimeCAN;
+            COM = str2double(strrep(s.Adquisition_COM, 'COM', ''));           
+            this.iwalker.setCANUSBSampleTime(s.Adquisition_SampleTimeCAN);
+            this.iwalker.setLidarSampleTime(s.Adquisition_SampleTimeLidar);
+            sc = this.iwalker.connect(COM);
+            if ~sc.canusb || ~sc.lidar
+                msg1 = '';
+                msg2 = '';
+                if ~sc.canusb 
+                    msg1 = 'CANUSB: connection failed';
+                end
+                if ~sc.lidar
+                    msg2 = 'Lidar: connection failed';
+                end
+                answer = questdlg({msg1, msg2, 'Do you want to start anyways?'}, 'Connection problem', 'yes','no','no');
+                if strcmp(answer, 'no')
+                    success =  false;
+                    return;
+                end                   
+            end
+            success = true;
         end
         
-        function success = startAdquisition(this)
-            s = this.settings.values;
-            COM = str2double(strrep(s.Adquisition_COM, 'COM', ''));
-            
-                this.iwalker.setCANUSBSampleTime(s.Adquisition_SampleTimeCAN);
-                this.iwalker.setLidarSampleTime(s.Adquisition_SampleTimeLidar);
-                sc = this.iwalker.connect(COM);
-                if ~sc.canusb || ~sc.lidar
-                    msg1 = '';
-                    msg2 = '';
-                    if ~sc.canusb 
-                        msg1 = 'CANUSB: connection failed';
-                    end
-                    if ~sc.lidar
-                        msg2 = 'Lidar: connection failed';
-                    end
-                    answer = questdlg({msg1, msg2, 'Do you want to start anyways?'}, 'Connection problem', 'yes','no','no');
-                    if strcmp(answer, 'no')
-                        success =  false;
-                        return;
-                    end                   
-                end
-                if sc.canusb && ...
-                        strcmp(s.Adquisition_walker, 'iWalkerRoboHokuyo') && ...
-                        s.Adquisition_EnableReactiveControl
-                    
-                    s.iwalker.writeReactive(s.Adquisition_LeftLambda, ...
-                                            s.Adquisition_RightLambda, ...
-                                            s.Adquisition_LeftNu, ...
-                                            Adquisition_RightNu);
-                end
-                this.iwalker.start();
-                success = true;
-                return;
+        function success = iWalkerDisconnect(this)
+            this.iwalker.disconnect();
+            success = true;
+        end
+        
+        function iWalkerStart(this)
+            this.iwalker.start();
         end
         
         % Listener for CANUSB connected to iWalkerRoboPeak
@@ -690,6 +664,11 @@ classdef (Sealed) iWalkerSLAM < handle
             switch this.state.mode
                 case this.MODE.ONLINE
                     if this.continueAndDiscard()
+                        
+                        if this.state.status == this.STATUS.IWK_READY
+                            this.iWalkerDisconnect();
+                        end
+                        
                         this.setMode(this.MODE.OFFLINE);
                         if isempty(this.dlog)
                             this.setStatus(this.STATUS.LOG_LOAD);
@@ -701,14 +680,26 @@ classdef (Sealed) iWalkerSLAM < handle
                     end
                     
                 case this.MODE.OFFLINE
-                    this.setMode(this.MODE.ONLINE);                   
-                    this.setStatus(this.STATUS.BUSY);                                    
-                    this.initAdquisition();
-                    this.setStatus(this.STATUS.IWK_READY);
-                    set(this.info.endTime, 'string', 'Inf');
-                    
+                    this.iWalkerInit();
+                    this.setMode(this.MODE.ONLINE);
+                    this.setStatus(this.STATUS.IWK_CONNECT);
+                    set(this.info.endTime, 'string', 'Inf');                   
             end
             set(this.info.currentTime, 'string', 0);
+        end
+        
+        function connect_Callback(this, ~, ~)
+            if this.state.status == this.STATUS.IWK_CONNECT
+                if this.iWalkerConnect()               
+                    this.setStatus(this.STATUS.IWK_READY);
+                end
+            elseif this.state.status == this.STATUS.IWK_READY
+                if this.continueAndDiscard()
+                    if this.iWalkerDisconnect()
+                        this.setStatus(this.STATUS.IWK_CONNECT);
+                    end
+                end
+            end
         end
         
         
@@ -718,6 +709,7 @@ classdef (Sealed) iWalkerSLAM < handle
             if path ~= 0
                 this.settings.values.Log_path = path;
                 this.loadLog(file);
+                this.settings.values.Rob_dt = this.dlog.dt;
             end
         end
         
@@ -739,24 +731,16 @@ classdef (Sealed) iWalkerSLAM < handle
             if this.state.mode == this.MODE.ONLINE              
                 if this.continueAndDiscard()
                     this.setStatus(this.STATUS.BUSY);             
-                    %modelOK = this.setupModel();
-%                     modelOK = true;
-                    this.sim.settings.Rob.dt = s.Adquisition_SampleTimeCAN;
                     this.initSimulation();
                     this.setStatus(this.STATUS.IWK_RUNNING);
-                    success = this.startAdquisition();
-
-                    if ~success
-                        this.setStatus(this.STATUS.IWK_READY);
-                    end
+                    this.iWalkerStart();
                 end
             else
                 switch this.state.status
                     case this.STATUS.LOG_READY % start log simulation
                         this.setStatus(this.STATUS.BUSY);
        
-                        this.dlog.init();
-                        this.sim.settings.Rob.dt = this.dlog.dt;
+                        this.dlog.init();                       
                         this.initSimulation();
                         this.timers.simlog.period = this.dlog.dt;
                         start(this.timers.simlog);
@@ -817,35 +801,25 @@ classdef (Sealed) iWalkerSLAM < handle
         
                 
         function settings_Callback(this, src, ~)
-            this.settings.show();
-            this.initSimulation();
-            this.initPlots();
+            try
+                this.settings.show();
+                this.initSimulation();
+                this.initPlots();
+                this.iWalkerInit();
+            catch
+                errordlg('Error in settings', 'Error');
+            end
         end
         
         function saveLogButton_Callback(this, ~, ~)
             try
                 s = this.settings.values;
                 dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
-                id = this.settings.values.Adquisition_count;
+                id = s.Adquisition_count;
                 filename = [num2str(id) '_' dstr];
-                pathname = this.settings.values.Adquisition_SavePath;
+                pathname = s.Adquisition_SavePath;
                 [filename, pathname] =  uiputfile('*.mat', 'Save log', fullfile(pathname, filename));
                 if pathname ~= 0
-%                     if strcmp(s.Adquisition_walker, 'iWalkerRoboPeak')
-%                         rps = this.walker.log.rps;
-%                         pose = evalin('base','pose');
-%                         range = evalin('base','range');
-%                         angle = evalin('base','angle');
-%                         count = evalin('base','count');
-%                         save(fullfile(pathname, filename), 'rph', 'pose', 'range', 'angle', 'count');
-%                     else
-%                         drpm = evalin('base', 'drpm');
-%                         pose = evalin('base', 'pose');
-%                         imu = evalin('base', 'imu');
-%                         forces = evalin('base', 'forces');
-%                         range = evalin('base', 'range');
-%                         save(fullfile(pathname, filename), 'drpm', 'pose', 'range', 'imu', 'forces');
-%                     end
                     saver = matfile(fullfile(pathname, filename),'Writable',true);
                     saver.log = this.iwalker.log;
                     this.settings.values.Adquisition_SavePath = pathname;
@@ -853,7 +827,7 @@ classdef (Sealed) iWalkerSLAM < handle
                     this.logSaved = true;
                 end
             catch
-                errordlg('Problem saving the log', 'Error');
+                errordlg('Error saving the log', 'Error');
             end
         end
         
@@ -898,8 +872,7 @@ classdef (Sealed) iWalkerSLAM < handle
             
             if s.MapPlot_drawRobotTrace && ~isempty(rob.x_hist)
                 mapPlot.drawTrace('iWalkerTrace', rob.x_hist, [1 0 0], 1);
-            end
-            
+            end           
             drawnow;
         end
         

@@ -51,7 +51,7 @@ classdef iWalkerRoboPeak < iWalkerInterface
             x =     iWalkerInterface.bytes2double(data(1),data(2));
             y =     iWalkerInterface.bytes2double(data(3),data(4));
             th =    iWalkerInterface.bytes2double(data(7),data(8));
-            pose = [x y th]/1000; % mm to m
+            pose = [x y th]/1000; % mm to m and mrad to rad
             
             w(1) = iWalkerInterface.bytes2double(ldata(1),ldata(2));
             w(2) = iWalkerInterface.bytes2double(rdata(1),rdata(2));
@@ -67,10 +67,15 @@ classdef iWalkerRoboPeak < iWalkerInterface
             end
             % If odmetry is high, it's due to overflow. We set the odometry to
             % zero.
-            if abs(odo(1)) > 5
+            if abs(odo(1)) > 1
                 odo = [0 0];
             end
-            
+            if odo(1) ~= 0 || odo(2) ~= 0
+            	disp('-----------');
+                disp(pose);
+                disp(this.prevPose);
+                disp(odo);
+            end
             this.prevPose = pose;           
         end
              
@@ -80,6 +85,7 @@ classdef iWalkerRoboPeak < iWalkerInterface
                 this.time = timestamp;
                 d = [];
                 [d.freq, d.count, d.range, d.angle] = this.lidar.getScan();
+                d.angle = mod(d.angle + 180, 360);
                 notify(this, 'lidarReaded', iWalkerEventData(d));
 
                 this.log.freq = this.log.freq.addsample('Time', timestamp, 'Data', d.freq);
