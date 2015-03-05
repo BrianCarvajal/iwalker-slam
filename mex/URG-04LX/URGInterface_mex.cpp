@@ -78,6 +78,7 @@ public:
         if (hCom != NULL) 
         {
             CloseHandle(hCom);
+            hCom = NULL;
             mexPrintf("URG: Closed!\n");
         }
         else 
