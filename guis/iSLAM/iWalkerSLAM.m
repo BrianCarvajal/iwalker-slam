@@ -17,11 +17,11 @@ classdef (Sealed) iWalkerSLAM < handle
             'LOG_LOAD',             2, ...
             'LOG_READY',            3, ...
             'LOG_RUNNING',          4, ...
-            'LOG_PAUSED',           5, ...
-            'IWK_NOT_CONNECTED',    6, ...
-            'IWK_CONNECTED',        7, ...
-            'IWK_RUNNING',          8, ...
-            'BUSY',                 9);
+            'LOG_SIMULATE',         6, ...
+            'IWK_NOT_CONNECTED',    7, ...
+            'IWK_CONNECTED',        8, ...
+            'IWK_RUNNING',          9, ...
+            'BUSY',                 10);
         
         MODE =   struct(...
             'ONLINE',   1, ...
@@ -45,9 +45,10 @@ classdef (Sealed) iWalkerSLAM < handle
         settings    % persistent settings
         settingsPath
         timers      % for plots, adquisition, ...
-        eh          %event handles for simulink
-        logSaved    %flag that indicates if last log was saved
-        redrawScan
+        eh          % event handles for simulink
+        logSaved    % true if last log was saved
+        redrawScan  % true if there is new lidar data to plot
+        stopCmd
     end
     
     
@@ -70,22 +71,21 @@ classdef (Sealed) iWalkerSLAM < handle
             this.icons.iwalker = iconRead('walker.png');
             this.icons.laptop = iconRead('laptop.png');
             this.icons.play = iconRead('play4.png');
-            this.icons.pause = iconRead('pause4.png');
             this.icons.stop = iconRead('stop4.png');
-            this.icons.step = iconRead('step.png');
             this.icons.log = iconRead('log.png');
-            this.icons.simulink = iconRead('simulink.png');
             this.icons.zoomIn = iconRead('zoomIn.png');
             this.icons.zoomOut = iconRead('zoomOut.png');
             this.icons.settings = iconRead('gear.png');
             this.icons.saveLog = iconRead('save.png');
             this.icons.connect = iconRead('plug-disconnect.png');
             this.icons.disconnect = iconRead('plug-connect.png');
+            this.icons.gear = iconRead('gear2.png');
             
             % Initialize state
             this.state.mode = this.MODE.ONLINE;
             this.state.status = this.STATUS.LOG_LOAD;
-            
+
+           
             % Create the figure
             this.fig = figure('Visible', 'on', ...
                 'name', 'iWalkerSLAM', ...
@@ -106,12 +106,18 @@ classdef (Sealed) iWalkerSLAM < handle
             this.layout.background = uiextras.VBox('Parent', this.fig);
             
             this.layout.main = uiextras.HBoxFlex('Parent', this.layout.background);
+            
+       
+            this.controls.slider = handle(uicontrol('Parent', this.layout.background, ... 
+                                                    'style', 'slider',...
+                                                    'callback', @this.slider_Callback));
+            
             this.statusbar.margin(1) = uiextras.Empty('Parent', this.layout.background);
             this.statusbar.bar = uiextras.HBox('Parent', this.layout.background);
             this.statusbar.margin(2) =uiextras.Empty('Parent', this.layout.background);           
             this.initStatusbar();
             
-            set(this.layout.background, 'Sizes', [-1 this.statusbar.marginWidth 15 this.statusbar.marginWidth]);
+            set(this.layout.background, 'Sizes', [-1  20 this.statusbar.marginWidth 15 this.statusbar.marginWidth]);
             
             
             this.layout.leftPanel = uiextras.VBoxFlex('Parent', this.layout.main);
@@ -123,7 +129,7 @@ classdef (Sealed) iWalkerSLAM < handle
             %uiextras.Empty('Parent', this.layout.leftPanel);
             
             
-            set(this.layout.leftPanel, 'Sizes', [-0.5 -0.5], 'Spacing', 6);
+            set(this.layout.leftPanel, 'Sizes', [-1 0], 'Spacing', 6);
             this.plots.map = MapAxes('Parent', this.layout.main);
             %gui.layout.tabpanel = uiextras.TabPanel('Parent', gui.layout.main);
             %Set the width of the left column (lidar plot and info box) and map
@@ -134,18 +140,15 @@ classdef (Sealed) iWalkerSLAM < handle
             this.sim = SimulationEngine();
             this.initSimulation();
                        
-            this.timers.simlog = timer('Name', 'DataLogTimer', ...
-                'BusyMode', 'queue', ...
-                'ExecutionMode', 'fixedRate', ...
-                'TimerFcn', @this.updateSimlog_Callback, ...
-                'ErrorFcn', @this.errorSimlog_Callback);
-           
             this.timers.plot = timer('Name', 'PlotTimer', ...
                 'ExecutionMode', 'fixedRate', ...
                 'BusyMode', 'drop', ...
                 'Period', this.settings.values.Plots_fps, ...
                 'TimerFcn', @this.updatePlots_Callback, ...
                 'ErrorFcn', @this.errorPlots_Callback);
+            
+            this.stopCmd = false;
+            
             initPlots(this);
             
             % Set initial status
@@ -193,6 +196,13 @@ classdef (Sealed) iWalkerSLAM < handle
                 'HandleVisibility','off', ...
                 'ClickedCallback', @this.loadLog_Callback);
             
+            % Simulate button
+            this.toolbar.simulateButton = uipushtool(this.toolbar.bar, ...
+                'CData', this.icons.gear,...
+                'TooltipString','Simulate log',...
+                'HandleVisibility','off', ...
+                'ClickedCallback', @this.simulateButton_Callback);
+            
             % Connect iwalker button
             this.toolbar.connect = uipushtool(this.toolbar.bar, ...
                 'CData', this.icons.connect,...
@@ -219,21 +229,17 @@ classdef (Sealed) iWalkerSLAM < handle
                 'CData', this.icons.play,...
                 'TooltipString','Run simulation',...
                 'HandleVisibility','off', ...
-                'ClickedCallback', @this.playButton_Callback);
-            
-            % Step button
-            this.toolbar.stepButton = uipushtool(this.toolbar.bar, ...
-                'CData', this.icons.step,...
-                'TooltipString','Run simulation',...
-                'HandleVisibility','off', ...
-                'ClickedCallback', @this.stepButton_Callback);
+                'ClickedCallback', @this.playButton_Callback);            
             
             % Save log button
             this.toolbar.saveLogButton = uipushtool(this.toolbar.bar, ...
                 'CData', this.icons.saveLog,...
                 'TooltipString','Save log',...
                 'HandleVisibility','off', ...
-                'ClickedCallback', @this.saveLogButton_Callback);         
+                'ClickedCallback', @this.saveLogButton_Callback);
+            
+            
+            
         end
         
         function initStatusbar(this)
@@ -283,6 +289,7 @@ classdef (Sealed) iWalkerSLAM < handle
             this.plots.radar.radius = this.settings.values.Lidar_Horizon;
             this.plots.radar.init();
             this.updatePlots_Callback();
+            this.timers.plot.Period =  this.settings.values.Plots_fps;
             start(this.timers.plot);
         end
         
@@ -302,9 +309,34 @@ classdef (Sealed) iWalkerSLAM < handle
         end
                
         
-        function initSimulation(gui)
-            gui.sim.settings = gui.settings.values;
-            gui.sim.init();
+        function initSimulation(this)
+            type = '';
+            switch this.state.mode
+                case this.MODE.OFFLINE;
+                    if ~isempty(this.dlog)
+                        if this.settings.values.GridMap_LimitsAuto
+                            lims = this.dlog.limits();
+                            this.settings.values.GridMap_LimitsMinX = lims(1) - 6;
+                            this.settings.values.GridMap_LimitsMaxX = lims(2) + 6;
+                            this.settings.values.GridMap_LimitsMinY = lims(1) - 6;
+                            this.settings.values.GridMap_LimitsMaxY = lims(2) + 6;
+                        end
+                        type = this.dlog.type;
+                    end
+                                      
+                case this.MODE.ONLINE
+                    type = this.settings.values.Adquisition_walker;
+            end
+            
+            switch type
+                case 'iWalkerRoboPeak'
+                    this.settings.values.Lidar_x = 0.35;
+                case 'iWalkerHokuyo'
+                     this.settings.values.Lidar_x = 0.6;
+            end
+            
+            this.sim.settings = this.settings.values;
+            this.sim.init();
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -327,31 +359,29 @@ classdef (Sealed) iWalkerSLAM < handle
                         'string', 'Ready', ...
                         'backgroundcolor', this.COLOR.READY);
                     set(this.toolbar.playButton, 'enable', 'on');
-                    set(this.toolbar.stepButton, 'enable', 'on');
                     set(this.toolbar.mode, 'enable', 'on');
                     set(this.toolbar.settings, 'enable', 'on');
                     set(this.toolbar.loadLog, 'enable', 'on');
                     set(this.toolbar.zoomIn, 'enable', 'on');
-                    
+                    set(this.toolbar.simulateButton, 'enable', 'on');
+                    set(this.controls.slider, 'enable', 'on');
+                 
+                case this.STATUS.LOG_SIMULATE
+                    set(this.info.status, ...
+                        'string', 'Simulate', ...
+                        'backgroundcolor', this.COLOR.READY);
+                    set(this.toolbar.mode, 'enable', 'on');
+                    set(this.toolbar.settings, 'enable', 'on');
+                    set(this.toolbar.loadLog, 'enable', 'on');
+                    set(this.toolbar.simulateButton, 'enable', 'on');
                     
                 case this.STATUS.LOG_RUNNING
                     set(this.info.status, ...
                         'string', 'Running', ...
                         'backgroundcolor', this.COLOR.RUNNING);
-                    set(this.toolbar.playButton, 'CData', this.icons.pause);
-                    set(this.toolbar.playButton, 'enable', 'on');
                     set(this.toolbar.stopButton, 'enable', 'on');
-                    
-                    
-                case this.STATUS.LOG_PAUSED
-                    set(this.info.status, ...
-                        'string', 'Paused', ...
-                        'backgroundcolor', this.COLOR.READY);
-                    set(this.toolbar.playButton, 'CData', this.icons.play);
-                    set(this.toolbar.playButton, 'enable', 'on');
-                    set(this.toolbar.stopButton, 'enable', 'on');
-                    set(this.toolbar.stepButton, 'enable', 'on');
-                    set(this.toolbar.zoomIn, 'enable', 'on');
+                    set(this.controls.slider, 'enable', 'on');
+                
                     
                 case this.STATUS.IWK_NOT_CONNECTED
                     set(this.info.status, ...
@@ -400,8 +430,9 @@ classdef (Sealed) iWalkerSLAM < handle
             set(this.toolbar.zoomIn, 'enable', 'off');
             set(this.toolbar.stopButton, 'enable', 'off');
             set(this.toolbar.playButton, 'enable', 'off');
-            set(this.toolbar.stepButton, 'enable', 'off');
             set(this.toolbar.saveLogButton, 'enable', 'off');
+            set(this.toolbar.simulateButton, 'enable', 'off');
+            set(this.controls.slider, 'enable', 'off');
         end
         
         function setMode(this, mode)
@@ -414,9 +445,10 @@ classdef (Sealed) iWalkerSLAM < handle
                     set(this.info.mode, 'string', 'Datalog');
                     set(this.toolbar.loadLog, 'visible', 'on');
                     set(this.toolbar.connect, 'visible', 'off');
-                    set(this.toolbar.stepButton, 'visible', 'on');
                     set(this.toolbar.saveLogButton, 'visible', 'off');
                     set(this.toolbar.zoomIn, 'visible', 'off');
+                    set(this.toolbar.simulateButton, 'visible', 'on');
+                    set(this.controls.slider, 'visible', 'on');
                 case this.MODE.ONLINE;
                     this.state.mode = mode;
                     set(this.toolbar.mode, ...
@@ -425,9 +457,10 @@ classdef (Sealed) iWalkerSLAM < handle
                     set(this.info.mode, 'string', 'iWalker');
                     set(this.toolbar.loadLog, 'visible', 'off');
                      set(this.toolbar.connect, 'visible', 'on');
-                    set(this.toolbar.stepButton, 'visible', 'off');
                     set(this.toolbar.saveLogButton, 'visible', 'on');
                     set(this.toolbar.zoomIn, 'visible', 'off');
+                    set(this.toolbar.simulateButton, 'visible', 'off');
+                    set(this.controls.slider, 'visible', 'off');
                 otherwise
                     error('Erroneus mode');
             end
@@ -441,7 +474,7 @@ classdef (Sealed) iWalkerSLAM < handle
             s = this.settings.values;
             if strcmp(s.Adquisition_walker, 'iWalkerRoboPeak')
                 this.iwalker = iWalkerRoboPeak();
-                            
+                           
                 % Register adquisition listeners
                 this.eh = [ ...
                     addlistener(this.iwalker, 'canusbReaded', @this.rpcanListner), ...
@@ -458,7 +491,8 @@ classdef (Sealed) iWalkerSLAM < handle
             end
         end
         
-        function success = iWalkerConnect(this)          
+        function success = iWalkerConnect(this)
+            this.iWalkerInit();
             s = this.settings.values;
             this.settings.values.Rob_dt = s.Adquisition_SampleTimeCAN;
             COM = str2double(strrep(s.Adquisition_COM, 'COM', ''));           
@@ -495,11 +529,11 @@ classdef (Sealed) iWalkerSLAM < handle
         % Listener for CANUSB connected to iWalkerRoboPeak
         function rpcanListner(this, src, e)
             try
-                this.setCurrentTime(this.iwalker.time);
+                this.setCurrentTime(e.Timestamp);
                 this.sim.stepOdometry(e.Data.odo);
-                t = this.info.table;
-                t.Data(1,2:4) = {this.sim.rob.x(1), this.sim.rob.x(2), this.sim.rob.x(3)};
-                t.Data(2,2:3) = {e.Data.rps(1), e.Data.rps(2)};
+                %t = this.info.table;
+                %t.Data(1,2:4) = {this.sim.rob.x(1), this.sim.rob.x(2), this.sim.rob.x(3)};
+                %t.Data(2,2:3) = {e.Data.rps(1), e.Data.rps(2)};
             catch
                 disp('Error in rpcanListner!');
             end
@@ -541,6 +575,7 @@ classdef (Sealed) iWalkerSLAM < handle
                 disp('Error in hokuyolidarListener!');
             end
         end
+              
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         %% Controls GUI Management
@@ -549,73 +584,8 @@ classdef (Sealed) iWalkerSLAM < handle
         function setCurrentTime(this, time)          
             set(this.info.currentTime, 'string', num2str(time, '%.1f'));
         end
-        
-        
-        function type = getLogType(~, s)
-            if isfield(s, 'pose')   && ...
-                    isfield(s, 'rps')    && ...
-                    isfield(s, 'range')  && ...
-                    isfield(s, 'angle')
-                type = 'rplidar';
-            elseif isfield(s, 'pose')   && ...
-                    isfield(s, 'drpm')   && ...
-                    isfield(s, 'range')  && ...
-                    isfield(s, 'imu')    && ...
-                    isfield(s, 'forces')
-                type = 'hokuyo';
-            else
-                type = 'unknown';
-            end
-        end
-        
-        function loadLog(this, file)
-            try
-                s = load(file);
-                type = this.getLogType(s);
-                if ~strcmp(type, 'unknown');
-                    switch type
-                        case 'rplidar'
-                            this.dlog = DataLog('pose', s.pose,'w', s.rph, 'range', s.range,'angle', s.angle);
-                            this.settings.values.Lidar_x = 0.35;
-                        case 'hokuyo'
-                            this.dlog = DataLog('pose', s.pose, 'w', s.drpm, 'range', s.range);
-                            this.settings.values.Lidar_x = 0.6;
-                    end
-                    if this.settings.values.GridMap_LimitsAuto
-                        lims = this.dlog.limits();
-                        this.settings.values.GridMap_LimitsMinX = lims(1) - 6;
-                        this.settings.values.GridMap_LimitsMaxX = lims(2) + 6;
-                        this.settings.values.GridMap_LimitsMinY = lims(1) - 6;
-                        this.settings.values.GridMap_LimitsMaxY = lims(2) + 6;
-                    end
-                    this.initSimulation();
-                    this.initPlots();
-                    set(this.info.endTime, 'String', num2str(this.dlog.endTime, '%.1f'));
-                    setStatus(this, this.STATUS.LOG_READY);
-                else
-                    errordlg('Unknown format data', 'Error');
-                end
-            catch
-                errordlg('Problem loading the log', 'Error');
-            end
-        end
-        
-        function simulationStep(this)
-            if this.dlog.remainingData()
-                [samples, ts] = this.dlog.nextSample();
-                this.setCurrentTime(ts);
-                for s = samples
-                    switch s.source
-                        case 'wheels'
-                            this.sim.stepOdometry(s.data.odo);                                                                                
-                        case 'lidar'
-                            this.sim.stepScan(s.data.range/1000, s.data.angle);
-                            this.redrawScan = true;
-                    end
-                end
-            end
-        end
-        
+            
+           
         function b = continueAndDiscard(this)
             if ~this.logSaved
                 answer = questdlg('The last log was not saved. Do you want to discard it?', ...
@@ -662,7 +632,6 @@ classdef (Sealed) iWalkerSLAM < handle
             switch this.state.mode
                 case this.MODE.ONLINE
                     if this.continueAndDiscard()
-                        
                         if this.state.status == this.STATUS.IWK_CONNECTED
                             this.iWalkerDisconnect();
                         end
@@ -708,12 +677,41 @@ classdef (Sealed) iWalkerSLAM < handle
         
         
         function loadLog_Callback(this, ~, ~)
-            path = this.settings.values.Log_path;
-            [file, path] = uigetfile('*.mat', 'Load datalog', path);
-            if path ~= 0
-                this.settings.values.Log_path = path;
-                this.loadLog(file);
-                this.settings.values.Rob_dt = this.dlog.dt;
+            try               
+                path = this.settings.values.Log_path;
+                [file, path] = uigetfile('*.mat', 'Load datalog', path);
+                if path ~= 0
+                    this.settings.values.Log_path = path;
+                   
+                    f = load(file);
+                    this.dlog = DataLog(f.iWalkerLog);
+
+                    set(this.info.endTime, 'String', num2str(this.dlog.endTime, '%.1f'));
+                    setStatus(this, this.STATUS.LOG_SIMULATE);
+                end
+            catch
+                errordlg('Problem loading the log', 'Error');
+            end
+        end
+        
+        function saveLogButton_Callback(this, ~, ~)
+            try
+                s = this.settings.values;
+                dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
+                id = s.Adquisition_count;
+                filename = [num2str(id) '_' dstr];
+                pathname = s.Adquisition_SavePath;
+                [filename, pathname] =  uiputfile('*.mat', 'Save log', fullfile(pathname, filename));
+                if pathname ~= 0
+                    saver = matfile(fullfile(pathname, filename),'Writable',true);
+                    saver.iWalkerLog = this.iwalker.log;
+                    saver.lidar_X = [s.Lidar_x s.Lidar_y s.Lidar_th];
+                    this.settings.values.Adquisition_SavePath = pathname;
+                    this.settings.values.Adquisition_count = id + 1;
+                    this.logSaved = true;
+                end
+            catch
+                errordlg('Error saving the log', 'Error');
             end
         end
         
@@ -724,7 +722,7 @@ classdef (Sealed) iWalkerSLAM < handle
                 this.setStatus(this.STATUS.IWK_CONNECTED);
             else
                 this.setStatus(this.STATUS.BUSY);
-                stop(this.timers.simlog);
+                this.stopCmd = true;
                 this.setStatus(this.STATUS.LOG_READY);
             end
         end
@@ -739,50 +737,94 @@ classdef (Sealed) iWalkerSLAM < handle
                     this.setStatus(this.STATUS.IWK_RUNNING);
                     this.iWalkerStart();
                 end
-            else
-                switch this.state.status
-                    case this.STATUS.LOG_READY % start log simulation
-                        this.setStatus(this.STATUS.BUSY);
-       
-                        this.dlog.init();                       
-                        this.initSimulation();
-                        this.timers.simlog.period = this.dlog.dt;
-                        start(this.timers.simlog);
-                        this.setStatus(this.STATUS.LOG_RUNNING);
-                        
-                    case this.STATUS.LOG_RUNNING % pause log simulation
-                        this.setStatus(this.STATUS.LOG_PAUSED);
-                        stop(this.timers.simlog);
-                        
-                    case this.STATUS.LOG_PAUSED % resume log simulation
-                        start(this.timers.simlog);
-                        this.setStatus(this.STATUS.LOG_RUNNING);
-                        
-                    case this.STATUS.IWK_CONNECTED
-                        this.setStatus(this.STATUS.IWK_RUNNING);
-                end
+            else                  
+                this.setStatus(this.STATUS.LOG_RUNNING);
+                this.stopCmd = false;               
+                slider = this.controls.slider;
+                step = floor(slider.Value);
+                while step < slider.Max && ~this.stopCmd
+                    tic;
+                    this.setSimulationStep(step);
+                    t = this.dlog.nextDelay(step) - toc;
+                    if t > 0
+                        pause(t);
+                    end
+                    step = step + 1;
+                end               
+                this.setStatus(this.STATUS.LOG_READY);               
             end
         end
         
-        function stepButton_Callback(this, ~, ~)
-            if this.state.status == this.STATUS.LOG_READY
-                this.dlog.init();
-                this.sim.settings.Rob_dt = this.dlog.dt;
-                this.initSimulation();
-                this.setStatus(this.STATUS.LOG_PAUSED);
+        
+        function simulateButton_Callback(this, ~, ~)
+            this.setStatus(this.STATUS.BUSY);
+            this.initSimulation();
+            this.initPlots();          
+            success = this.dlog.simulate(this.sim);           
+            if success
+                set(this.controls.slider, ...
+                    'Value', 0, ...
+                    'Min', 0, ...
+                    'Max', this.dlog.maxStep(), ...
+                    'SliderStep', [1 10]/this.dlog.maxStep());               
+                this.setSimulationStep(0);              
+                stop(this.timers.plot);
+                this.setStatus(this.STATUS.LOG_READY);
+            else
+                this.setStatus(this.STATUS.LOG_SIMULATE);
+            end
+        end
+        
+        function setSimulationStep(this, step)
+            % Sync slider
+            this.controls.slider.Value = step;
+            
+            data = this.dlog.setSimulationStep(step);
+            
+            lid = data.lid;
+            rob = data.rob;
+            s = this.settings.values;
+            mapPlot = this.plots.map;
+            radPlot = this.plots.radar;
+ 
+            this.setCurrentTime(data.timestamp);
+            
+            if s.MapPlot_drawRobot
+                mapPlot.drawRobot('iWalker', rob.x, this.sim.rob.S, [1 0 0]);
             end
             
-            if this.state.status == this.STATUS.LOG_PAUSED && this.dlog.remainingData()
-                this.simulationStep();
-                if this.dlog.remainingData()
-                    this.setStatus(this.STATUS.LOG_PAUSED);
-                else
-                    this.setStatus(this.STATUS.BUSY);
-                    this.setStatus(this.STATUS.LOG_READY);
-                end
+            if s.MapPlot_drawRobotTrace
+                mapPlot.drawTrace('iWalkerTrace', rob.x_back, [1 0 0], 0.1, '-');
+                mapPlot.drawTrace('iWalkerTraceForward', rob.x_forw, [0.7 0.7 0.7], 0.1, '-');
             end
+            
+            if s.RadarPlot_drawValid && s.RadarPlot_drawPoints
+                radPlot.drawPoints('ScanPoints.Valid', lid.p(:,lid.valid), 10, [0 1 1], '.');
+            end
+            if s.RadarPlot_drawValid && s.RadarPlot_drawRays
+                radPlot.drawRays('ScanRays.Valid', lid.p(:,lid.valid), [0 0.5 0.5], 1, '-');
+            end
+            if s.GridMap_Enabled
+                mapPlot.setImage(data.img, this.sim.gmp.R);
+            end
+            if s.MapPlot_drawScanArea
+                % To obtain a valid geometry for the patch, we set the
+                % non valid points to lidar location and add two extra
+                % points, one at the begining and other at the end at
+                % lidar position.
+                p = repmat(lid.x, 1, size(lid.pw,2));
+                p(:,lid.valid) = lid.pw(:,lid.valid);
+                p = [lid.x  p  lid.x];
+                mapPlot.drawScannedArea('ScannedArea', p, [0 0.5 0.5], 0.5);
+            end
+            
+            mapPlot.drawLandmark('Landmarks', data.landmarks, [0 1 0]);
+            
+            
+
+            drawnow;
         end
-        
+               
         function zoomIn_Callback(this, src, event)
             %             axes(gui.plots.map.hAxes);
             %             switch get(src, 'State')
@@ -794,13 +836,6 @@ classdef (Sealed) iWalkerSLAM < handle
         end
         
         function zoomOut_Callback(this, src, event)
-            %             axes(gui.plots.map.hAxes);
-            %             switch get(src, 'State')
-            %                 case 'on'
-            %                     zoom;
-            %                 case 'off'
-            %                     zoom off;
-            %             end
         end
         
                 
@@ -809,33 +844,27 @@ classdef (Sealed) iWalkerSLAM < handle
                 this.settings.show();
                 this.initSimulation();
                 this.initPlots();
-                this.iWalkerInit();
+                %this.iWalkerInit();
             catch
                 errordlg('Error in settings', 'Error');
             end
         end
         
-        function saveLogButton_Callback(this, ~, ~)
-            try
-                s = this.settings.values;
-                dstr = strrep(strrep(datestr(now), ' ', '_'), ':', '-');
-                id = s.Adquisition_count;
-                filename = [num2str(id) '_' dstr];
-                pathname = s.Adquisition_SavePath;
-                [filename, pathname] =  uiputfile('*.mat', 'Save log', fullfile(pathname, filename));
-                if pathname ~= 0
-                    saver = matfile(fullfile(pathname, filename),'Writable',true);
-                    saver.log = this.iwalker.log;
-                    this.settings.values.Adquisition_SavePath = pathname;
-                    this.settings.values.Adquisition_count = id + 1;
-                    this.logSaved = true;
-                end
-            catch
-                errordlg('Error saving the log', 'Error');
-            end
+        
+        
+        function slider_Callback(this, slider, ~)
+            % To avoid acumulate callbacks we lock the function
+            persistent lock_slider_Callback            
+            if isempty(lock_slider_Callback)
+                lock_slider_Callback = 1;
+            else
+                return;
+            end            
+            slider = handle(slider);
+            step = floor(slider.Value);                       
+            this.setSimulationStep(step);                    
+            lock_slider_Callback = [];
         end
-        
-        
         
         % Timer callbacks
         function updatePlots_Callback(this, t, ~)
@@ -845,7 +874,8 @@ classdef (Sealed) iWalkerSLAM < handle
             rob = this.sim.rob;
             mapPlot = this.plots.map;
             radPlot = this.plots.radar;
-            if this.redrawScan
+            %if this.redrawScan
+            if true
                 this.redrawScan = false;
                 
                 if s.RadarPlot_drawValid && s.RadarPlot_drawPoints
@@ -868,6 +898,9 @@ classdef (Sealed) iWalkerSLAM < handle
                     p = [lid.x  p  lid.x];
                     mapPlot.drawScannedArea('ScannedArea', p, [0 0.5 0.5], 0.5);
                 end
+                if ~isempty(ext.output)
+                    mapPlot.drawLandmark('Landmarks', ext.output.landmarks, [0 1 0]);
+                end
             end
             
             if s.MapPlot_drawRobot
@@ -875,37 +908,18 @@ classdef (Sealed) iWalkerSLAM < handle
             end
             
             if s.MapPlot_drawRobotTrace && ~isempty(rob.x_hist)
-                mapPlot.drawTrace('iWalkerTrace', rob.x_hist, [1 0 0], 1);
+                mapPlot.drawTrace('iWalkerTrace', rob.x_hist, [1 0 0], 1, '-');
             end           
             drawnow;
         end
         
         function errorPlots_Callback(this, t, event)
             this.setStatus(this.STATUS.BUSY);
-            stop(this.timers.simlog);
+            %stop(this.timers.simlog);
             this.setStatus(this.STATUS.LOG_READY);
             errordlg('Error in drawing process', 'Error');
         end
-        
-        
-        
-        function updateSimlog_Callback(this, t, event)
-            if this.dlog.remainingData()
-                this.simulationStep();
-            else
-                this.setStatus(this.STATUS.BUSY);
-                stop(this.timers.simlog);
-                this.setStatus(this.STATUS.LOG_READY);
-            end
-        end
-        
-        function errorSimlog_Callback(this, t, event)
-            this.setStatus(this.STATUS.BUSY);
-            stop(this.timers.simlog);
-            this.setStatus(this.STATUS.LOG_READY);
-            errordlg('Error in simulation process', 'Error');
-        end
-                
+                      
     end
     
     methods (Access = public)
@@ -918,6 +932,3 @@ classdef (Sealed) iWalkerSLAM < handle
     
     
 end
-
-
-

@@ -10,37 +10,38 @@ classdef iWalkerRoboPeak < iWalkerInterface
             this.canusb = CANUSBInterface();           
             this.initLog();
         end
+        
                  
         function initLog(this)
            this.log.type = 'iWalkerRoboPeak';
             
-           this.log.pose = timeseries();
-           this.log.pose.Name = 'iWalker Pose';
-           this.log.pose.DataInfo.Units = 'm';
+           this.log.can.pose = timeseries();
+           this.log.can.pose.Name = 'iWalker Pose';
+           this.log.can.pose.DataInfo.Units = 'm';
            
-           this.log.rps = timeseries();
-           this.log.rps.Name = 'angular velocities';
-           this.log.rps.DataInfo.Units = 'rad/s';
+           this.log.can.w = timeseries();
+           this.log.can.w.Name = 'angular velocities';
+           this.log.can.w.DataInfo.Units = 'rad/s';
            
-           this.log.odo = timeseries();
-           this.log.odo.Name = 'odometry';
-           this.log.odo.DataInfo.Units = 'm | rad';
+           this.log.can.odo = timeseries();
+           this.log.can.odo.Name = 'odometry';
+           this.log.can.odo.DataInfo.Units = 'm | rad';
            
-           this.log.range = timeseries();
-           this.log.range.Name = 'scan range';
-           this.log.range.DataInfo.Units = 'mm';
+           this.log.lidar.range = timeseries();
+           this.log.lidar.range.Name = 'scan range';
+           this.log.lidar.range.DataInfo.Units = 'mm';
            
-           this.log.angle = timeseries();
-           this.log.angle.Name = 'scan angle';
-           this.log.angle.DataInfo.Units = 'degrees';
+           this.log.lidar.angle = timeseries();
+           this.log.lidar.angle.Name = 'scan angle';
+           this.log.lidar.angle.DataInfo.Units = 'degrees';
            
-           this.log.freq = timeseries();
-           this.log.freq.Name = 'scan frequency';
-           this.log.freq.DataInfo.Units = 'Hz';
+           this.log.lidar.freq = timeseries();
+           this.log.lidar.freq.Name = 'scan frequency';
+           this.log.lidar.freq.DataInfo.Units = 'Hz';
            
-           this.log.count = timeseries();
-           this.log.count.Name = 'scan count';
-           this.log.count.DataInfo.Units = 'scalar';          
+           this.log.lidar.count = timeseries();
+           this.log.lidar.count.Name = 'scan count';
+           this.log.lidar.count.DataInfo.Units = 'scalar';          
         end
          
         function [pose, odo, w] = readWheels(this)
@@ -58,40 +59,27 @@ classdef iWalkerRoboPeak < iWalkerInterface
             
             w = w/94.7; % mm/s to rad/s
             
-            Xp = this.prevPose;
-            odo = [sqrt((pose(1)-Xp(1))^2 + (pose(2)-Xp(2))^2) pose(3)-Xp(3)];                     
-            
-            advance = (w(1) + w(2)) / 2;
-            if advance < 0
-                odo(1) = -odo(1);
-            end
-            % If odmetry is high, it's due to overflow. We set the odometry to
-            % zero.
-            if abs(odo(1)) > 1
-                odo = [0 0];
-            end
-            if odo(1) ~= 0 || odo(2) ~= 0
-            	disp('-----------');
-                disp(pose);
-                disp(this.prevPose);
-                disp(odo);
-            end
-            this.prevPose = pose;           
+            speed = (w(1) + w(2)) / 2;
+            odo = this.computeOdometry(pose, speed);       
         end
              
         function lidar_callback(this, t, ~)
             try
                 timestamp = toc;
-                this.time = timestamp;
                 d = [];
                 [d.freq, d.count, d.range, d.angle] = this.lidar.getScan();
                 d.angle = mod(d.angle + 180, 360);
-                notify(this, 'lidarReaded', iWalkerEventData(d));
+                if isempty(this.log.lidar.range.Time)
+                    dt = 0;
+                else
+                    dt = timestamp - this.log.lidar.range.Time(end);
+                end
+                notify(this, 'lidarReaded', iWalkerEventData(d, timestamp, dt));
 
-                this.log.freq = this.log.freq.addsample('Time', timestamp, 'Data', d.freq);
-                this.log.count = this.log.count.addsample('Time', timestamp, 'Data', d.count);
-                this.log.range = this.log.range.addsample('Time', timestamp, 'Data', d.range);
-                this.log.angle = this.log.angle.addsample('Time', timestamp, 'Data', d.angle);
+                this.log.lidar.freq = this.log.lidar.freq.addsample('Time', timestamp, 'Data', d.freq);
+                this.log.lidar.count = this.log.lidar.count.addsample('Time', timestamp, 'Data', d.count);
+                this.log.lidar.range = this.log.lidar.range.addsample('Time', timestamp, 'Data', d.range);
+                this.log.lidar.angle = this.log.lidar.angle.addsample('Time', timestamp, 'Data', d.angle);
             catch
                 
             end
@@ -102,12 +90,17 @@ classdef iWalkerRoboPeak < iWalkerInterface
                 timestamp = toc;
                 this.time = timestamp;
                 d = [];
-                [d.pose, d.odo, d.rps] = this.readWheels();
-                notify(this, 'canusbReaded', iWalkerEventData(d));
-
-                this.log.pose = this.log.pose.addsample('Time', timestamp, 'Data', d.pose);
-                this.log.odo = this.log.odo.addsample('Time', timestamp, 'Data', d.odo);
-                this.log.rps = this.log.rps.addsample('Time', timestamp, 'Data', d.rps);
+                [d.pose, d.odo, d.w] = this.readWheels();                
+                if isempty(this.log.can.pose.Time)
+                    dt = 0;
+                else
+                    dt = timestamp - this.log.can.pose.Time(end);
+                end                
+                notify(this, 'canusbReaded', iWalkerEventData(d,timestamp, dt));
+                
+                this.log.can.pose = this.log.can.pose.addsample('Time', timestamp, 'Data', d.pose);
+                this.log.can.odo = this.log.can.odo.addsample('Time', timestamp, 'Data', d.odo);
+                this.log.can.w = this.log.can.w.addsample('Time', timestamp, 'Data', d.w);
             catch
                 
             end

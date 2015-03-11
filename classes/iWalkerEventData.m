@@ -4,11 +4,15 @@ classdef (ConstructOnLoad) iWalkerEventData < event.EventData
     
     properties
         Data
+        Timestamp
+        DeltaTime
     end
     
     methods
-        function ed = iWalkerEventData(data)
+        function ed = iWalkerEventData(data, ts, dt)
            ed.Data = data; 
+           ed.Timestamp = ts;
+           ed.DeltaTime = dt;
         end
     end
     

@@ -14,33 +14,33 @@ classdef iWalkerHokuyo < iWalkerInterface
         function initLog(this)
            this.log.type = 'iWalkerHokuyo';
             
-           this.log.pose = timeseries();
-           this.log.pose.Name = 'iWalker Pose: [x | y | theta]';
-           this.log.pose.DataInfo.Units = 'm';
+           this.log.can.pose = timeseries();
+           this.log.can.pose.Name = 'iWalker Pose: [x | y | theta]';
+           this.log.can.pose.DataInfo.Units = 'm';
            
-           this.log.rps = timeseries();
-           this.log.rps.Name = 'angular velocities: [left | right]';
-           this.log.rps.DataInfo.Units = 'rad/s';
+           this.log.can.w = timeseries();
+           this.log.can.w.Name = 'angular velocities: [left | right]';
+           this.log.can.w.DataInfo.Units = 'rad/s';
            
-           this.log.odo = timeseries();
-           this.log.odo.Name = 'odometry [distance | theta]';
-           this.log.odo.DataInfo.Units = 'm | rad';
+           this.log.can.odo = timeseries();
+           this.log.can.odo.Name = 'odometry [distance | theta]';
+           this.log.can.odo.DataInfo.Units = 'm | rad';
            
-           this.log.imu = timeseries();
-           this.log.imu.Name = 'IMU: [accelX | accelY | gyroPsi]';
-           this.log.imu.DataInfo.Units = 'mm/s^2 | mm/s^2 | º/s';
+           this.log.can.imu = timeseries();
+           this.log.can.imu.Name = 'IMU: [accelX | accelY | gyroPsi]';
+           this.log.can.imu.DataInfo.Units = 'mm/s^2 | mm/s^2 | º/s';
            
-           this.log.forces = timeseries();
-           this.log.forces.Name = 'Forces: [lHandX | lHandY | lHandZ | lHBrake | rHandX | rHandY | rHandZ | rHandBrake | lLeg | rLeg]';
-           this.log.forces.DataInfo.Units = 'N';
+           this.log.can.forces = timeseries();
+           this.log.can.forces.Name = 'Forces: [lHandX | lHandY | lHandZ | lHBrake | rHandX | rHandY | rHandZ | rHandBrake | lLeg | rLeg]';
+           this.log.can.forces.DataInfo.Units = 'N';
            
-           this.log.range = timeseries();
-           this.log.range.Name = 'scan range';
-           this.log.range.DataInfo.Units = 'mm';
+           this.log.lidar.range = timeseries();
+           this.log.lidar.range.Name = 'scan range';
+           this.log.lidar.range.DataInfo.Units = 'mm';
            
-           this.log.angle = timeseries();
-           this.log.angle.Name = 'scan angle';
-           this.log.angle.DataInfo.Units = 'degrees';
+           this.log.lidar.angle = timeseries();
+           this.log.lidar.angle.Name = 'scan angle';
+           this.log.lidar.angle.DataInfo.Units = 'degrees';
         end             
         
         function [pose, odo, w] = readWheels(this)
@@ -58,22 +58,8 @@ classdef iWalkerHokuyo < iWalkerInterface
             
             w = w*((2*pi)/600); %drpm to rad/s
             
-            % Compute odometry based on two consecutive poses
-            Xp = this.prevPose;
-            odo = [sqrt((pose(1)-Xp(1))^2 + (pose(2)-Xp(2))^2) pose(3)-Xp(3)];
-            
-            % If velocity is negative, the distance is negative
-            advance = (w(1) + w(2)) / 2;
-            if advance < 0
-                odo(1) = -odo(1);
-            end
-            % If odmetry is high, it's due to overflow.
-            % We set the odometry to zero.
-            if abs(odo(1)) > 5
-                odo = [0 0];
-            end
-        
-            this.prevPose = pose;           
+            speed = (w(1) + w(2)) / 2;
+            odo = this.computeOdometry(pose, speed);            
         end
         
         
@@ -117,14 +103,18 @@ classdef iWalkerHokuyo < iWalkerInterface
         function lidar_callback(this, t, ~)
             try
                 timestamp = toc;
-                this.time = timestamp;
                 d = [];
                 d.range = this.lidar.getScan();
                 d.angle = ((0.3515625 *((1:682) - 1)) - 120);
-                notify(this, 'lidarReaded', iWalkerEventData(d));
+                if isempty(this.log.lidar.range.Time)
+                    dt = 0;
+                else
+                    dt = timestamp - this.log.lidar.range.Time(end);
+                end
+                notify(this, 'lidarReaded', iWalkerEventData(d, timestamp, dt));
 
-                this.log.range = this.log.range.addsample('Time', timestamp, 'Data', d.range);
-                this.log.angle = this.log.angle.addsample('Time', timestamp, 'Data', d.angle);
+                this.log.lidar.range = this.log.lidar.range.addsample('Time', timestamp, 'Data', d.range);
+                this.log.lidar.angle = this.log.lidar.angle.addsample('Time', timestamp, 'Data', d.angle);
             catch
                 
             end
@@ -135,16 +125,21 @@ classdef iWalkerHokuyo < iWalkerInterface
                 timestamp = toc;
                 this.time = timestamp;
                 d = [];
-                [d.pose, d.odo, d.rps] = this.readWheels();
+                [d.pose, d.odo, d.w] = this.readWheels();
                 d.imu = this.readIMU();
-                d.forces = this.readForces();
-                notify(this, 'canusbReaded', iWalkerEventData(d));
+                d.forces = this.readForces();              
+                if isempty(this.log.can.pose.Time)
+                    dt = 0;
+                else
+                    dt = timestamp - this.log.can.pose.Time(end);
+                end               
+                notify(this, 'canusbReaded', iWalkerEventData(d,timestamp, dt));
 
-                this.log.pose = this.log.pose.addsample('Time', timestamp, 'Data', d.pose);
-                this.log.odo = this.log.odo.addsample('Time', timestamp, 'Data', d.odo);
-                this.log.rps = this.log.rps.addsample('Time', timestamp, 'Data', d.rps);
-                this.log.imu = this.log.imu.addsample('Time', timestamp, 'Data', struct2array(d.imu));
-                this.log.forces = this.log.forces.addsample('Time', timestamp, 'Data', struct2array(d.forces));
+                this.log.can.pose = this.log.can.pose.addsample('Time', timestamp, 'Data', d.pose);
+                this.log.can.odo = this.log.can.odo.addsample('Time', timestamp, 'Data', d.odo);
+                this.log.can.w = this.log.can.w.addsample('Time', timestamp, 'Data', d.w);
+                this.log.can.imu = this.log.can.imu.addsample('Time', timestamp, 'Data', struct2array(d.imu));
+                this.log.can.forces = this.log.can.forces.addsample('Time', timestamp, 'Data', struct2array(d.forces));
             catch
                 
             end

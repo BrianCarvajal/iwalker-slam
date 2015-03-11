@@ -69,6 +69,7 @@ classdef SimulationEngine < handle
             W = V; % TODO
             this.ekf = EKFSLAM(this.rob, V, P0, 'map', this.map, 'estMap', false, 'W', V);
             this.ekf.x_est(1:3) = this.rob.x(1:3);
+            this.ekf.keepHistory = true;
             
             % Grid Map
             xlims = [s.GridMap_LimitsMinX s.GridMap_LimitsMaxX];

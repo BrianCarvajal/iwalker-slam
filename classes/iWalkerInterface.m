@@ -28,8 +28,9 @@ classdef iWalkerInterface < hgsetget
     
     methods
         function this = iWalkerInterface()
-            this.prevPose = [0 0 0];
+            this.prevPose = [];
             this.time = 0;
+            this.log.endTime = 0;
             this.lidar_timer = timer(...
                 'Name', 'LidarTimer', ...
                 'BusyMode', 'queue', ...
@@ -55,12 +56,13 @@ classdef iWalkerInterface < hgsetget
         function start(this)
             this.initLog();
             this.time = 0;
-            tic;
-            start(this.lidar_timer);
+            tic;            
             start(this.canusb_timer);
+            start(this.lidar_timer);
         end
         
         function stop(this)
+            this.log.endTime = toc;
             stop(this.lidar_timer);
             stop(this.canusb_timer);
         end
@@ -86,6 +88,29 @@ classdef iWalkerInterface < hgsetget
             success.canusb = this.canusb.disconnect();
             success.lidar = this.lidar.disconnect();
         end
+        
+        
+    end
+    
+    methods (Access = protected)
+       function odo = computeOdometry(this, pose, speed)
+            Xp = this.prevPose;
+            if isempty(Xp)
+                odo = [0 0];
+            else
+                odo = [sqrt((pose(1)-Xp(1))^2 + (pose(2)-Xp(2))^2) pose(3)-Xp(3)];                     
+                % If velocity is negative, the distance is negative
+                if speed < 0
+                    odo(1) = -odo(1);
+                end
+                % If odmetry is high, it's due to overflow. We set the odometry to
+                % zero.
+                if abs(odo(1)) > 1
+                    odo = [0 0];
+                end
+            end
+            this.prevPose = pose;
+        end 
     end
     
     methods (Static, Access = protected)

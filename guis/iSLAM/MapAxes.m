@@ -117,7 +117,7 @@ classdef MapAxes < hgsetget
             hgt.Matrix = transl([x(1:2)' 0]) * trotz (x(3));
         end
         
-        function drawTrace(this, tag, p, color, lineWidth)
+        function drawTrace(this, tag, p, color, lineWidth, style)
             if (isempty(this.hAxes) && ~ishandle(this.hAxes))
                 this.init();
             end
@@ -126,14 +126,21 @@ classdef MapAxes < hgsetget
             end
             h = handle(findobj(this.hAxes, 'Tag', tag));
             if isempty(h)
-                 h = handle(line(p(:,1), p(:,2), 'Color', color, 'LineWidth', lineWidth));
+                 %h = handle(line(p(:,1), p(:,2), 'Color', color, 'LineWidth', lineWidth, 'LineStyle', style));
+                 h = handle(patch([p(:,1); NaN],[p(:,2); NaN],0, ...
+                            'LineStyle', '-', ...
+                            'FaceColor', 'none', ...
+                            'EdgeColor', color, ...
+                            'LineWidth', lineWidth, ...
+                            'LineStyle', style));
                  h.Tag = tag;
                  h.Parent = this.hAxes;
             else
-                h.XData = p(:,1);
-                h.YData = p(:,2);
-                h.Color = color;
+                h.XData = [p(:,1); NaN];
+                h.YData = [p(:,2); NaN];
+                h.EdgeColor= color;
                 h.LineWidth = lineWidth;
+                h.LineStyle = style;
             end            
         end
         
@@ -156,6 +163,42 @@ classdef MapAxes < hgsetget
                 h.FaceAlpha = transp;
             end
         end
+        
+        function drawLandmark(this, tag, lans, color)
+            if (isempty(this.hAxes) && ~ishandle(this.hAxes))
+                this.init();
+            end
+            
+            this.erase(tag);
+            for lan = lans
+                if lan.type == Landmark.TYPE.Corner
+                    c1 = [0 1 0];
+                    c2= color ./ 1.2;
+                elseif lan.type == Landmark.TYPE.Oclusor
+                    c1 = [1 0 1];
+                    c2= color ./ 1.2;
+                else
+                    c1 = [1 0 1];
+                    c2= color ./ 1.2;
+                end
+                %                     c1 = color;
+                %                     c2= color ./ 1.2;
+                lx = lan.pos(1);
+                ly = lan.pos(2);
+                h = handle(plot(this.hAxes, ...
+                    lx,ly, ...
+                    'LineStyle','none', ...
+                    'Marker','o', ...
+                    'MarkerSize',5, ...
+                    'MarkerEdgeColor',c1, ...
+                    'MarkerFaceColor',c2, ...
+                    'HitTest', 'off'));
+                h.Tag = tag;
+                % h.Parent = this.hAxes;
+                h.UserData = lan;
+            end
+        end
+    
         
         function newScan(obj)
 %            obj.updateMap = true; 
