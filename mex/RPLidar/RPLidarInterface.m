@@ -22,8 +22,8 @@ classdef RPLidarInterface < handle
             success = rplidar_mex('disconnect', this.objectHandle);
         end
         
-        function [freq, count, range, angle] = getScan(this)
-            [freq, count, range, angle] = rplidar_mex('getScan', this.objectHandle);
+        function [freq, count, range, angle, quality] = getScan(this)
+            [freq, count, range, angle, quality] = rplidar_mex('getScan', this.objectHandle);
         end
         
     end

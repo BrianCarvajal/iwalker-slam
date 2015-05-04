@@ -1,4 +1,5 @@
 function [ m, c ] = estimateLine(X, Y)
+%ESTIMATELINE - Least Squares Fitting function
     %[m, c] = inv(X'*X)*X'*Y;
     Y = Y';
     X = [X' ones(1,length(X))'];

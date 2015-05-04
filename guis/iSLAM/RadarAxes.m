@@ -117,6 +117,35 @@ classdef RadarAxes < hgsetget
             end
         end
         
+        function eraseText(this)
+            if (isempty(this.hAxes) && ~ishandle(this.hAxes))
+                return;
+            end
+            delete(handle(findall(this.hAxes, 'Type', 'text')));
+        end
+        
+        function writeText(this, tag, p, str, color, fontsize)
+            if (isempty(this.hAxes) && ~ishandle(this.hAxes))
+                this.init();
+            end
+            
+            h = handle(findobj(this.hAxes, 'Tag', tag));
+            if isempty(h)
+                h = handle(text('Position', p, ...
+                    'String', str, ...
+                    'Parent', this.hAxes, ...
+                    'Color', color', ...
+                    'FontSize', fontsize, ...
+                    'Tag', tag));
+            else
+                h.Position = p;
+                h.String = str;
+                %                 set(h, ...
+                %                     'Position', p, ...
+                %                     'String', str);
+            end
+        end
+        
         function drawPoints(this, tag, p, s, color, marker)
             if (isempty(this.hAxes) && ~ishandle(this.hAxes))
                 this.init();
@@ -159,33 +188,85 @@ classdef RadarAxes < hgsetget
             end
         end
         
-%         function update(obj)
-% %             lid = obj.sim.lid;
-% %             rob = obj.sim.rob;
-% %             res = obj.sim.ext.output;
-% %             ptr = obj.plotter;
-% %             if  obj.updateScan
-% %                 %obj.updateScan = false;
-% %                 if ~isempty(res)
-% %                     ptr.plotPoints(res.p(1,:), res.p(2,:), 'points.inRange', [0 1 1], 10, '.');
-% %                     ptr.plotPoints(res.pOutRange(1,:), res.pOutRange(2,:), 'points.outRange', [1 0 1], 10, '.');
-% %                     ptr.plotRays([0 0], res.p(1,:), res.p(2,:), 'rays.inRange', [0 1 1]./2, 0.1, '-');
-% %                     ptr.plotRays([0 0], res.pOutRange(1,:), res.pOutRange(2,:), 'rays.outRange', [1 0 0]./2, 0.1, '-');
-% %                     ptr.plotRays([0 0], res.pDeadZone(1,:), res.pDeadZone(2,:), 'rays.deadZone', [0.2 0.2 0.2]./2, 0.1, '-');
-% %                 end
-% %                 %p = lid.p(:, lid.range > 0 & lid.range < 6);
-% %                 %obj.plotter.plotPoints(p(1,:), p(2,:), 'points', [1 0 0], 3, '.');
-% %                 %obj.plotter.plotScanArea(p(1,:), p(2,:), 'scan', [0 0.2 0.8], 0.5);
-% %             end
-% %             set(obj.gh.ring, 'Matrix', trotz (rob.x(3)-pi/2));
-%         end
+        function drawSegments(this, tag, segments, color, lineWidth, style)
+            if (isempty(this.hAxes) && ~ishandle(this.hAxes))
+                this.init();
+            end
+            
+            if isempty(segments)
+                X = NaN;
+                Y = NaN;
+            else
+                X = NaN(1,length(segments)*3);
+                Y = NaN(1,length(segments)*3);
+                i = 1;
+                for s = segments
+                    X(i:i+1) = [s.a(1) s.b(1)];
+                    Y(i:i+1) = [s.a(2) s.b(2)];
+                    i = i + 3;
+                end
+            end
+            
+            h = handle(findobj(this.hAxes, 'Tag', tag));
+            if isempty(h)
+                patch(X, Y, 0, ...
+                    'LineStyle', '-', ...
+                    'FaceColor', 'none', ...
+                    'EdgeColor', color, ...
+                    'LineWidth', lineWidth, ...
+                    'LineStyle', style, ...
+                    'HitTest', 'off', ...
+                    'Tag', tag, ...
+                    'Parent', this.hAxes);
+            else
+                set(h, ...
+                    'XData', X, ...
+                    'YData', Y, ...
+                    'EdgeColor', color, ...
+                    'LineWidth', lineWidth, ...
+                    'LineStyle', style);
+            end
+        end
         
-%         function newScan(obj)
-%             obj.updateScan = true;
-%         end
-        
-        
-        
+        function drawHough(this, tag, segments, color, lineWidth, style)
+            if (isempty(this.hAxes) && ~ishandle(this.hAxes))
+                this.init();
+            end
+            if isempty(segments)
+                X = NaN;
+                Y = NaN;
+            else
+                X = NaN(1,length(segments)*3);
+                Y = NaN(1,length(segments)*3);
+                i = 1;
+                for s = segments
+                    X(i:i+1) = [0 s.mp(1)];
+                    Y(i:i+1) = [0 s.mp(2)];
+                    i = i + 3;
+                end
+            end
+            
+            h = handle(findobj(this.hAxes, 'Tag', tag));
+            if isempty(h)
+                patch(X, Y, 0, ...
+                    'LineStyle', '-', ...
+                    'FaceColor', 'none', ...
+                    'EdgeColor', color, ...
+                    'LineWidth', lineWidth, ...
+                    'LineStyle', style, ...
+                    'HitTest', 'off', ...
+                    'Tag', tag, ...
+                    'Parent', this.hAxes);
+            else
+                set(h, ...
+                    'XData', X, ...
+                    'YData', Y, ...
+                    'EdgeColor', color, ...
+                    'LineWidth', lineWidth, ...
+                    'LineStyle', style);
+            end
+        end
+  
     end
     
 end

@@ -29,10 +29,6 @@ classdef Landmark < handle
                          % stores a reference to that landmark
     end
     
-    properties (Constant)
-        %% Enumerations (native enumerations matlab's are crap)
-        TYPE = struct('Corner', 1, 'Oclusor', 2, 'Virtual', 3);
-    end
     
     properties (Dependent = true)
         x, y
@@ -41,11 +37,21 @@ classdef Landmark < handle
     methods
         function obj = Landmark(pos, type)
             %Landmark object constructor
-            %           
-            obj.pos = pos;
-            obj.posl = pos;
+            
+             if ~strcmpi(type, 'corner') && ...
+                ~strcmpi(type, 'oclusor') && ...
+                ~strcmpi(type, 'virtual')
+                error('Invalid argumment: type');
+             end
+             
+            if numel(pos) ~= 2
+               error('Invalid argument: pos');
+            end
+            
+            obj.pos = pos(:);
+            obj.posl = pos(:);
             obj.type = type;
-            obj.V = [0 0; 0 0];
+            obj.V = ones(2,2)*0.001;
             obj.matched_landmark = [];
         end
         
@@ -65,11 +71,7 @@ classdef Landmark < handle
             lan.pos(2,:) = y;
         end
         
-        function b = isConvex(lan)
-            b = lan.ang < 0;
-        end
-        
-        
+            
         function transform(lan, T)
             lan.pos = pTransform(lan.pos, T);
         end
@@ -107,13 +109,7 @@ classdef Landmark < handle
                 ];
         end
         
-        function update(lan, p)
-            %if lan.pos ~= p
-            lan.pos = p;
-            %  lan.times_updated = lan.times_updated + 1;
-            %lan.hist_pos = [lan.hist_pos; lan.pos];
-            %end
-        end
+        
         
         function J = Hxf(lan, xv)
             %Landmark.Hxf Jacobian dh/dxf
@@ -172,6 +168,25 @@ classdef Landmark < handle
                 sin(theta + bearing),    r*cos(theta + bearing)
                 ];
         end
+
+        function update(lan, x, P)
+            %if lan.pos ~= p
+            lan.pos = x;
+            lan.V = P;
+            %  lan.times_updated = lan.times_updated + 1;
+            %lan.hist_pos = [lan.hist_pos; lan.pos];
+            %end
+        end
+        
+        function d = euclideanDistance(lan1, lan2)
+            d = sqrt((lan1.x - lan2.x)^2+(lan1.y - lan2.y)^2);
+        end
+
+        function md = mahalanobisDistance(lan1, lan2, S)
+            %d = euclideanDistance(lan1, lan2);
+            d = [lan1.x - lan2.x; lan1.y - lan2.y];
+            md = d'*inv(S)*d;
+        end
         
         function s = sameness(l1, l2)
             s = sqrt( (l1.x - l2.x)^2 + (l1.y - l2.y)^2 );
@@ -186,46 +201,6 @@ classdef Landmark < handle
             [v, i ] = min(s);
         end
         
-        
-        
-%         function plot(lans, argv)
-%             if nargin < 2
-%                 argv = 'r';
-%             end
-%             hold on;
-%             
-%             hg = gcf;   
-%             
-%             for lan = lans
-%                 u1 = lan.u1 * 0.1;
-%                 u2 = lan.u2 * 0.1;
-%                 X = [lan.x + u1(1), lan.x, lan.x + u2(1)];
-%                 Y = [lan.y + u1(2), lan.y, lan.y + u2(2)];
-%                 if lan.isConvex()
-%                     color = 'c';
-%                 else
-%                     color = 'y';
-%                 end
-%                 
-%                 tag = ['Landmark_', num2str(lan.id)];
-%                 h = findobj(hg, 'Tag', tag);
-%                 if isempty(h)
-%                     h = line(X, Y, 'Color', color, 'LineWidth', 5);
-%                     %text(lan.x , lan.y, int2str(lan.id), 'FontSize', 20, 'Color', 'r');
-%                     set(h, 'Tag', tag);
-%                     set(h, 'UserData', lan);
-%                 else
-%                     set(h, 'XData', X, 'YData', Y, 'Color', color);
-%                 end
-% 
-%             end
-%             
-%         end
-%         
-%         function plot_hist(lan, argv)
-%             h = lan.hist_pos;
-%             plot(h(:,1), h(:,2), 'o-r');
-%         end
     end
     
 end

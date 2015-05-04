@@ -1,4 +1,4 @@
-function [FL, V] = splitAndMerge( p, threshold, maxOutliers)
+function [FL, V] = splitAndMerge( r, a, threshold, maxOutliers)
 %splitAndMerge construct segments in a set of consecutive points
 %   [FL, V] = splitAndMerge(P, TS) return a pair vector FL and a vector V. 
 %   Each pair of the vector FL contains the first and the last index of the 

@@ -120,7 +120,8 @@ public:
     void getScan(double *freqOutput, 
                  double *countOutput, 
                  double *rangeOutput, 
-                 double *angleOutput)
+                 double *angleOutput,
+                 double *qualityOutput)
     {
        u_result op_return;
        size_t count = 0;
@@ -139,6 +140,7 @@ public:
                for (int i = 0; i < max_i; ++i) {
                    angleOutput[i] = (nodes[i].angle_q6_checkbit >> RPLIDAR_RESP_MEASUREMENT_ANGLE_SHIFT)/64.0f;
                    rangeOutput[i] = nodes[i].distance_q2/4.0f;
+                   qualityOutput[i] = nodes[i].sync_quality >> RPLIDAR_RESP_MEASUREMENT_QUALITY_SHIFT;
                }
            }
        }
@@ -147,6 +149,7 @@ public:
         for (int i = (int)count; i < DATA_MAX_LENGTH; ++i) {
             angleOutput[i] = 0;
             rangeOutput[i] = 0;
+            qualityOutput[i] = 0;
         }
        
        *freqOutput = freq;
@@ -228,7 +231,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
     if (!strcmp("getScan", cmd)) 
     {
         // Check parameters
-        if (nlhs != 4 || nrhs != 2)
+        if (nlhs != 5 || nrhs != 2)
             mexErrMsgTxt("getScan: Unexpected arguments.");
         
         // Call the method
@@ -236,13 +239,15 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
         // Allocate output arrays
         plhs[2] = mxCreateDoubleMatrix(1,rpl->OutputSize(),mxREAL);
         plhs[3] = mxCreateDoubleMatrix(1,rpl->OutputSize(),mxREAL);
+        plhs[4] = mxCreateDoubleMatrix(1,rpl->OutputSize(),mxREAL);
         
         double *outRange = mxGetPr(plhs[2]);
         double *outAngle = mxGetPr(plhs[3]);
+        double *outQuality = mxGetPr(plhs[4]);
         double outFreq;
         double outCount;
         
-        rpl->getScan(&outFreq, &outCount, outRange, outAngle);
+        rpl->getScan(&outFreq, &outCount, outRange, outAngle, outQuality);
 
         plhs[0] = mxCreateDoubleScalar(outFreq);
         plhs[1] = mxCreateDoubleScalar(outCount);

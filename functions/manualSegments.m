@@ -11,6 +11,9 @@ function s = manualSegments( n, noise, sep, lims )
     if nargin < 2
         noise = 0.1;
     end
+    if nargin < 1
+       n = 1; 
+    end
     s = [];
     h = figure('MenuBar', 'none', 'Name', 'Segment editor');
     set(h, 'renderer', 'opengl');
@@ -42,11 +45,11 @@ function s = manualSegments( n, noise, sep, lims )
        end
        x = x+rand(size(x))*noise;
        y = y+rand(size(y))*noise;
-       if isHorizontal
-            plot(x,y,'.g');
-       else
-           plot(x,y,'.b');
-       end
+%        if isHorizontal
+%             plot(x,y,'.g');
+%        else
+%            plot(x,y,'.b');
+%        end
        s = [s Segment([x; y])];
        s.plot;
     

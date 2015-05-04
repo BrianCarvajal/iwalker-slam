@@ -42,6 +42,7 @@ classdef LIDAR < hgsetget
         outliers
         inDeadAngle
         outRange
+        
     end
     
     properties (Dependent = true)
@@ -81,7 +82,11 @@ classdef LIDAR < hgsetget
         end
         
         function c = get.count(this) 
-           c = size(this.range,1); 
+           c = size(this.range,2); 
+        end
+        
+        function x = get.x(this)
+            x = pTransform([0;0], this.Tw);
         end
         
         function Tw = get.Tw(this)
@@ -92,25 +97,18 @@ classdef LIDAR < hgsetget
             end
         end
         
-        function x = get.x(this)
-            x = pTransform([0;0], this.Tw);
-        end
+%         function x = get.x(this)
+%             x = pTransform([0;0], this.Tw);
+%         end
         
         function attachToRobot(this, rob, x)
             if ~isequal(size(x), [1 3])
                 error('x must be a 1x3 vector')
             end
             this.robot = rob;
-            this.T = se2(x(1), x(2), x(2));
+            this.T = se2(x(1), x(2), x(3));
         end
         
-%         function T = globalTransform(this)
-%            if isempty(this.robot)
-%               T = this.T;
-%            else
-%               T = this.robot.globalTransform * this.T;
-%            end
-%         end
         
         function newScan(this, range, angle)
         %LIDAR.setScan Set new scan data
@@ -119,14 +117,17 @@ classdef LIDAR < hgsetget
         %   R:  a vector with range data, in m.
         %   A:  a vector with angle data, in degrees.
         
+
             if size(range,1) ~= size(angle,1)
                 error('range and angle musth have the same size');
             end
             range(range == 0 | range > this.validRange(2)) = this.horizon;
             this.range = double(range);
+            
             this.angle = double(angle);
             this.p = [this.range .* cosd(this.angle); 
                       this.range .* sind(this.angle)];
+                  
             this.pw = pTransform(this.p, this.Tw());
             
             %% Find points in dead angle (behind iwalker)
@@ -134,7 +135,8 @@ classdef LIDAR < hgsetget
             this.inDeadAngle = (this.angle > 180-z) & (this.angle < 180+z);
 
             %% Find points too near or too far (just for paint)
-            this.outRange = this.range < this.validRange(1) | this.range > this.validRange(2);
+            this.outRange = ~this.inDeadAngle & ...
+                            (this.range < this.validRange(1) | this.range > this.validRange(2));
  
             %% Find outliers
             pd = pdist2next(this.p);

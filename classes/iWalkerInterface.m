@@ -7,6 +7,7 @@ classdef iWalkerInterface < hgsetget
         lidar
         time
         log
+        running
     end
     
     properties (SetAccess = protected, Hidden = true)
@@ -43,6 +44,7 @@ classdef iWalkerInterface < hgsetget
                 'Period', 0.5, ...
                 'ExecutionMode', 'fixedRate', ...
                 'TimerFcn', @this.canusb_callback);
+            this.running = false;
         end
         
         function delete(this)
@@ -54,6 +56,7 @@ classdef iWalkerInterface < hgsetget
         end
         
         function start(this)
+            this.running = true;
             this.initLog();
             this.time = 0;
             tic;            
@@ -62,9 +65,12 @@ classdef iWalkerInterface < hgsetget
         end
         
         function stop(this)
-            this.log.endTime = toc;
-            stop(this.lidar_timer);
-            stop(this.canusb_timer);
+            if this.running
+                this.running = false;
+                this.log.endTime = toc;
+                stop(this.lidar_timer);
+                stop(this.canusb_timer);
+            end
         end
         
         function setLidarSampleTime(this, st)

@@ -4,7 +4,7 @@
 %
 %
 
-classdef LandmarkExtractor < handle
+classdef FeatureExtractor < handle
 
   
     properties
@@ -30,174 +30,114 @@ classdef LandmarkExtractor < handle
     
     
     methods
-        function ext = LandmarkExtractor()
+        function ext = FeatureExtractor()
             
             %% Default parameters
             ext.validRange = [0.01 5.5];
             ext.deadZoneAngle = 165;
             ext.maxClusterDist = 0.3;
             ext.minClusterPoints = 3;
-            ext.maxOutliers = 3;
+            ext.maxOutliers = 1;
             ext.splitDist = 0.15;
             ext.lengthSegmentThresh = 0.5;
-            ext.collinearityThresh = 0.1;
+            ext.collinearityThresh = 0.3;
             % outputs
             ext.output = [];
         end
         
 
-        function Landmarks = extract(ext, lid)
-            
-            r = lid.range;
-            r(r==0 | r>6) = 6;
-            a = lid.angle;
-            p = [r .* cosd(a); r .* sind(a)];
-            Tw = lid.Tw;
-            pw = pTransform(p, Tw);
-            
-            Landmarks = [];
-            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            %%%%%%%%%%%%%%%%%%%% Preproces %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            
-            
-            %% Find points in dead zone (behind iwalker)
-            deadZone = lid.angle > 180-ext.deadZoneAngle/2 & lid.angle < 180+ext.deadZoneAngle/2;
-            pDeadZone = p(:,deadZone);
-            pwDeadZone = pw(:,deadZone);
-            p = p(:, ~deadZone);
-            pw = pw(:, ~deadZone);
-            r = r(~deadZone);
-            a = a(~deadZone);
-            
-            %% Find outliers
-            pd = pdist2next(p);
-            outlier = false(size(pd));
-            for i = 2:length(outlier)-1
-                outlier(i) = pd(i-1) > ext.maxClusterDist && pd(i) > ext.maxClusterDist;
-            end
-            pOutlier = p(:, outlier);
-            pwOutlier = pw(:, outlier);
-            p = p(:, ~outlier);
-            pw = pw(:, ~outlier);
-            r = r(~outlier);
-            a = a(~outlier);
-            
-            
-            p = lid.p(:, ~lid.outliers & ~lid.inDeadAngle);
-            pw = lid.pw(:, ~lid.outliers & ~lid.inDeadAngle);
-            r = lid.range(~lid.outliers & ~lid.inDeadAngle);
-            a = lid.angle(~lid.outliers & ~lid.inDeadAngle);
-            
-            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            %%%%%%%%%%%%%%%%%%%% Line extraction %%%%%%%%%%%%%%%%%%%%%%%%%%
-            
+        function extract(ext, r, a, pw)  
+            %pw = [r.*cosd(a); r.*sind(a)];
             %% Clusterize
-            C = clusterize(p,r,a, ext.validRange, ext.maxClusterDist);
+            C = clusterize(pw, r, a, ext.validRange, ext.maxClusterDist, 3);
             
-            
-            %% Split and Merge
-            LL = [];
-            VV = [];
-            oclusor = false(1,length(pw));
-            for i = 1: length(C)
-                cl = C{i};
-                n = cl.end - cl.start;
-                if n > ext.minClusterPoints && ~cl.outOfRange
-                    oclusor(cl.start) = cl.startOclusor;
-                    oclusor(cl.end) = cl.endOclusor;
-                    pp = pw(:, cl.start:cl.end);
-                    [L, V]= splitAndMerge(pp, ext.splitDist, ext.maxOutliers);
-                    % Add index offset
-                    offset = cl.start - 1;
-                    L = L + offset;
-                    V = V + offset;
-                    
-                    LL = [LL L];
-                    VV = [VV V];
-                end
-            end
-            
-            olans = [];
-            %% Fit segments
-            segs = [];
-            for i = 1:size(LL,2)
-                if LL(2,i) - LL(1, i) > 5    
-                    pl = pw(:, LL(1, i):LL(2,i));
-                    s = Segment(pl);
-                    if s.d > ext.lengthSegmentThresh
-                        if oclusor(LL(1,i))
-                            s.aOclusor = true;
-                            Landmarks = [Landmarks Landmark(s.a,2)];
-                        end
-                        if oclusor(LL(2,i))
-                            s.bOclusor = true;
-                            Landmarks = [Landmarks Landmark(s.b,2)];
-                        end
-                        segs = [segs s];
+            %% Segment extraction
+            S = repmat(Segment, size(C));
+            sidx = 0;
+            for c = C
+                n = size(c.p, 2);            
+                if c.valid && n > ext.minClusterPoints         
+                    segs = splitAndFit(c.p, ext.splitDist, 5, ext.maxOutliers);
+                    prevSeg = [];
+                    for s = segs
+                       if s.d > ext.lengthSegmentThresh
+                          if ~isempty(prevSeg)
+                             % If the previus segment is valid, we link
+                             % the two segments
+                             s.Sa = prevSeg;
+                             prevSeg.Sb = s;
+                          end
+                          sidx = sidx + 1;
+                          S(sidx) = s;
+                          prevSeg = s;
+                       else
+                           prevSeg = [];
+                       end
                     end
                 end
             end
-            
-            %% Agroup segment in lines
-            agrouped = false(1,length(segs));
-            seglins = [];
-            for i = 1:length(segs)
-               if ~agrouped(i)
-                  group = i;
-                  agrouped(i) = true;
-                  for j = i+1:length(segs)
-                     if ~agrouped(j)
-                        if collinearity(segs(i), segs(j)) < ext.collinearityThresh
-                           agrouped(j) = true;
-                           group = [group j];
-                        end
-                     end
-                  end
-                  seglins = [seglins SegmentedLine(segs(group))];
+            S = S(1:sidx);
+
+            %% Corner extraction
+            Corners = repmat(CornerFeature, size(S));
+            icor = 0;
+            % Save corners Landmarks
+            for s = S
+               if ~isempty(s.Sb) && ...
+                   s.perpendicularity(s.Sb) > 0.8
+                   pc = s.interesection(s.Sb);
+                   icor = icor + 1;
+                   Corners(icor) = CornerFeature(pc, diag([0.01, 1*pi/180]));
                end
             end
+            Corners = Corners(1:icor);
             
-            %% Construct Landmarks
-            for i = 1:length(seglins)
-                for j = i+1:length(seglins)
-                    k = seglins(i).perpendicularity(seglins(j));
-                    if k > 0.5
-                        %TODO: implement SegmentedLine.interesections !
-                        [qq, ff] = seglins(i).interesection(seglins(j));
-                        if ff == 1 % virtual landmark
-                            %vlans = [vlans Landmark(qq, 3)];
-                        elseif ff == 2
-                           % elans = [elans Landmark(qq, 2)];
-                        elseif ff == 3 % corner landmark
-                            Landmarks = [Landmarks Landmark(qq, 1)];
+            %% Agroup segment in lines
+            agrouped = false(1,length(S));
+            S2 = [];
+            for i = 1:length(S)
+                if ~agrouped(i)
+                    group = i;
+                    agrouped(i) = true;
+                    if isempty(S(i).Sb)
+                        for j = i+1:length(S)
+                            if ~agrouped(j) && isempty(S(j).Sa)
+                                dd = pdist2(S(i).b, S(j).a);
+                                rd = abs(S(i).rho - S(j).rho);
+                                td = abs(angdiff(S(i).theta, S(j).theta));
+
+                                if rd < 0.2 && td*180/pi < 20 && dd < 0.6
+                                    agrouped(j) = true;
+                                    group = [group j];
+                                end
+                            end
                         end
                     end
+                    S2 = [S2 Segment([S(group).p])];
+                end
+                
+                %seglins = [seglins SegmentedLine(S(group))];
+            end
+            S = S2;
+            
+            Segments = repmat(SegmentFeature, size(S));
+            iseg = 0;
+            for s = S
+                if s.d > 1
+                    sf = SegmentFeature([s.rho, s.theta, s.sd s.ed], diag([0.01, 1*pi/180]));
+                    iseg = iseg + 1;
+                    sf.id = -iseg;
+                    Segments(iseg) = sf;
                 end
             end
-
-            %% Find points too near or too far (just for paint)
-            outRange = r < ext.validRange(1) | r > ext.validRange(2);
-            pOutRange = p(:,outRange);
-            pwOutRange = pw(:,outRange);
-            p = p(:, ~outRange);
-            pw = pw(:, ~outRange); 
+            Segments = Segments(1:iseg);
             
-            ext.output.segments = segs;
-            ext.output.lines = seglins;
-            ext.output.landmarks = Landmarks;
-            ext.output.p = p;
-            ext.output.pDeadZone = pDeadZone;
-            ext.output.pOutlier = pOutlier;
-            ext.output.pOutRange = pOutRange;
-            ext.output.pw = pw;
-            ext.output.pwDeadZone = pwDeadZone;
-            ext.output.pwOutlier = pwOutlier;
-            ext.output.pwOutRange = pwOutRange;
+
+            ext.output.segments = S;
+            ext.output.corners = Corners;
+            ext.output.segmentFeatures = Segments;
             ext.output.clusters = C;
-            ext.output.edges = LL;
-            ext.output.vertices = VV;
-            ext.output.segments = segs;
-            ext.output.lines = seglins;            
+                    
 %             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %             %% Get points inside valid range

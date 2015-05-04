@@ -1,23 +1,99 @@
 %DifferentialRobot Differential robot class
+%
+% This class models the kinematics of a differential wheeled robot.  For
+% given steering and velocity inputs it updates the true vehicle state and returns
+% noise-corrupted odometry readings.
+%
+% Methods::
+%   init         initialize vehicle state
+%   f            predict next state based on odometry
+%   step         move one time step and return noisy odometry
+%   control      generate the control inputs for the vehicle
+%   update       update the vehicle state
+%   run          run for multiple time steps
+%   Fx           Jacobian of f wrt x
+%   Fv           Jacobian of f wrt odometry noise
+%   gstep        like step() but displays vehicle
+%   plot         plot/animate vehicle on current figure
+%   plot_xy      plot the true path of the vehicle
+%   add_driver   attach a driver object to this vehicle
+%   display      display state/parameters in human readable form
+%   char         convert to string
+%
+% Static methods::
+%   plotv        plot/animate a pose on current figure
+%
+% Properties (read/write)::
+%   x               true vehicle state (3x1)
+%   V               odometry covariance (2x2)
+%   odometry        distance moved in the last interval (2x1)
+%   rdim            dimension of the robot (for drawing)
+%   S               separation between wheels
+%   alphalim        steering wheel limit <- TODO: Remove?
+%   maxspeed        maximum vehicle speed
+%   T               sample interval
+%   x_hist          history of true vehicle state (Nx3)
+%   x0              initial state, restored on init()
+%
+% Examples::
+%
+% Create a robot with odometry covariance
+%       rob = DifferentialRobot( diag([0.1 0.01].^2 );
+% and display its initial state
+%       rob
+% now apply a speed (0.2m/s) and steer angle (0.1rad) for 1 time step
+%       odo = rob.update([0.2, 0.1])
+% where odo is the noisy odometry estimate, and the new true vehicle state
+%       rob
+%
+%
+% Notes::
+% - Subclasses the MATLAB handle class which means that pass by reference semantics
+%   apply.
 
-classdef DifferentialRobot < hgsetget
+% Copyright (C) 2014, by Brian Carvajal Meza, based in Peter I. Corke code,
+% part of The Robotics Toolbox for Matlab (RTB).
+%
+% This file is part of a master thesis.
+%
+% RTB is free software: you can redistribute it and/or modify
+% it under the terms of the GNU Lesser General Public License as published by
+% the Free Software Foundation, either version 3 of the License, or
+% (at your option) any later version.
+%
+% RTB is distributed in the hope that it will be useful,
+% but WITHOUT ANY WARRANTY; without even the implied warranty of
+% MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+% GNU Lesser General Public License for more details.
+%
+% You should have received a copy of the GNU Leser General Public License
+% along with RTB.  If not, see <http://www.gnu.org/licenses/>.
+
+classdef DifferentialRobot < handle
     
     properties
         % state
-        Xr
-        Xr0
-        Xr_hist      % x history
+        x           % true state (x,y,theta)
+        x_hist      % x history
         
         % parameters
         S           % separation of the wheels
         r           % radius of the wheels
         maxwspeed   % maximum wheels speed
         alphalim    % maximum angular speed
-        Vr          % odometry covariance        
+        dim         % dimension of the world -dim -> +dim in x and y
+        rdim        % dimension of the robot
+        dt          % sample interval
+        V           % odometry covariance        
         w;          % angular velocity of the wheels
     
         odometry    % distance moved in last interval
- 
+        
+        verbose
+        
+        
+        x0          % initial state
+        plotTag     % tag for plots
     end
     properties (SetAccess = private)
         lidar       % LIDAR object
@@ -29,35 +105,63 @@ classdef DifferentialRobot < hgsetget
     end
     methods
         
-        function this = DifferentialRobot(varargin)
+        function this = DifferentialRobot(V, varargin)
             %DifferentialRobot object constructor
+            %
+            % rob = DifferentialRobot(V_ACT, OPTIONS)  creates a DifferentialRobot object with actual odometry
+            % covariance V_ACT (2x2) matrix corresponding to the odometry vector [dx dtheta].
+            %
+            % Options::
+            % 'stlim',A       Steering angle limit (default 2 Pi rad)
+            % 'vmax',S        Maximum speed (default 5m/s)
+            % 'S',S           Wheels separation (default 20cm)
+            % 'r',r           Radius of the wheels (default 3cm)
+            % 'x0',x0         Initial state (default (0,0,0) )
+            % 'verbose'       Be verbose
+            %
+            % Notes::
+            % - Subclasses the MATLAB handle class which means that pass by reference semantics
+            %   apply.
             
-            %% Default values
-            this.Xr0 = zeros(3,1);
-            this.Vr = zeros(2,2);
-            this.alphalim = 2*pi; 
-            this.maxwspeed = 5;
-            this.S = 0.52;
-            this.r = 0.0947;
             
+            %%Default values
+            if nargin < 1
+                V = zeros(2,2);
+            elseif ~isnumeric(V)
+                error('first arg is V');
+            end
+            opt.vmax = 5;
+            opt.S = 0.52; %m
+            opt.r = 0.0947; %m
 
-            %% Set inputs
-            this.set(varargin{:});            
-            % TODO: check inputs
+            opt.x0 = zeros(3,1);
             
-            this.init();
-
+            %%Parse optionals arguments
+            opt = tb_optparse(opt, varargin);
+            
+            this.x = zeros(3,1);
+            this.V = V;
+            this.alphalim = (2*opt.vmax)/opt.S;
+            this.maxwspeed = opt.vmax;
+            this.S = opt.S;
+            this.r = opt.r;
+            this.x0 = opt.x0(:);
+            this.verbose = opt.verbose;
+            this.w = zeros(2,1);
+            
+            this.x_hist = this.x';
+            this.plotTag = 'DifferentialRobot.plot';
         end
         
         function T = get.T(this)
-            T = se2(this.Xr(1), this.Xr(2), this.Xr(3));
+            T = se2(this.x(1), this.x(2), this.x(3));
         end
         
-%         function T= globalTransform(this)
-%             T = se2(this.Xr(1), this.Xr(2), this.Xr(3));
-%         end
+        function T= globalTransform(this)
+            T = se2(this.x(1), this.x(2), this.x(3));
+        end
         
-        function attachLidar(this, lidar, Xl)
+        function attachLidar(this, lidar, x)
             %DifferentialRobot.attachLidar Set a LIDAR object
             %
             % rob.attachLidar(L, X) sets the lidar pose X (x, y, theta)
@@ -66,20 +170,23 @@ classdef DifferentialRobot < hgsetget
                 error('lidar must be a LIDAR object');
             end
             this.lidar = lidar;
-            this.lidar.attachToRobot(this, Xl);
+            this.lidar.attachToRobot(this, x);
         end
         
-        function init(this)
+        function init(this, x0)
             %DifferentialRobot.init Reset state of vehicle object
             %
             % rob.init() sets the state rob.x := rob.x0, initializes the driver
             % object (if attached) and clears the history.
             %
             % rob.init(X0) as above but the state is initialized to X0.
-
-            this.Xr = this.Xr0;
-            this.Xr_hist = this.Xr0';
-            this.w = zeros(2,1);                    
+            if nargin > 1
+                this.x = x0(:);
+            else
+                this.x = this.x0;
+            end
+            this.w = zeros(2,1);           
+            this.x_hist = this.x';
         end
         
         function max = maxspeed(this, angularSpeed)
@@ -87,7 +194,7 @@ classdef DifferentialRobot < hgsetget
             max = this.maxwspeed - (angularSpeed * this.S / 2);
         end
         
-        function xnext = f(this, Xr, odo, w)
+        function xnext = f(this, x, odo, w)
             %DifferentialRobot.f Predict next state based on odometry
             %
             % XN = rob.f(X, ODO) predict next state XN (1x3) based on current state X (1x3) and
@@ -113,8 +220,8 @@ classdef DifferentialRobot < hgsetget
             %
             % vectorized code:
             
-            thp = Xr(:,3) + dth;
-            xnext = Xr + [(dd+w(1))*cos(thp)  (dd+w(1))*sin(thp) ones(size(Xr,1),1)*dth+w(2)];
+            thp = x(:,3) + dth;
+            xnext = x + [(dd+w(1))*cos(thp)  (dd+w(1))*sin(thp) ones(size(x,1),1)*dth+w(2)];
             %xnext = rob.x';
         end
         
@@ -149,10 +256,10 @@ classdef DifferentialRobot < hgsetget
             if nargin < 3
                w = zeros(2,1); 
             end
-            this.Xr = this.f(this.Xr', odo)';
+            this.x = this.f(this.x', odo)';
             this.odometry = odo;
             this.w = w;
-            this.Xr_hist = [this.Xr_hist; this.Xr'];   % maintain history
+            this.x_hist = [this.x_hist; this.x'];   % maintain history
         end
         
         
@@ -176,12 +283,12 @@ classdef DifferentialRobot < hgsetget
             
             u = this.control(speed, steer);
             
-            xp = this.Xr; % previous state
-            this.Xr(1) = xp(1) + u(1)*dt*cos(xp(3));
-            this.Xr(2) = xp(2) + u(1)*dt*sin(xp(3));
-            this.Xr(3) = xp(3) + u(2)*dt;
+            xp = this.x; % previous state
+            this.x(1) = xp(1) + u(1)*dt*cos(xp(3));
+            this.x(2) = xp(2) + u(1)*dt*sin(xp(3));
+            this.x(3) = xp(3) + u(2)*dt;
             
-            odo = [colnorm(this.Xr(1:2)-xp(1:2)) this.Xr(3)-xp(3)];
+            odo = [colnorm(this.x(1:2)-xp(1:2)) this.x(3)-xp(3)];
             
             % If speed is negative, the odometry must be negative too
             if u(1) < 0
@@ -189,14 +296,14 @@ classdef DifferentialRobot < hgsetget
             end
             this.odometry = odo;
             
-            this.Xr_hist = [this.Xr_hist; this.Xr'];   % maintain history
+            this.x_hist = [this.x_hist; this.x'];   % maintain history
         end
         
         function odo = updateNoisy(this, speed, steer, dt)
             %u = this.control(u(1), u(2));
             odo =  updateControl(this, speed, steer, dt);
-            if ~isempty(this.Vr)
-                odo = odo + randn(1,2)*this.Vr;
+            if ~isempty(this.V)
+                odo = odo + randn(1,2)*this.V;
             end
         end
         

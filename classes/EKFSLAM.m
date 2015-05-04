@@ -1,590 +1,438 @@
-classdef EKFSLAM < handle
+classdef EKFSLAM < hgsetget
+    %UNTITLED Summary of this class goes here
+    %   Detailed explanation goes here
     
     properties
-        % STATE:
-        % the state vector is [x_vehicle x_map] where
-        % x_vehicle is 1x3 and
-        % x_map is 1x(2N) where N is the number of map features
-        x_est           % estimated state
-        P_est           % estimated covariance
+        X
+        P
+        P0
+        rob
+        map
+        featureIndex
         
-        % Features keeps track of features we've seen before.
-        % Each column represents a feature.  This is a fixed size
-        % array, indexed by feature id.
-        % row 1: the start of this feature's state in the feature
-        %        part of the state vector, initially NaN
-        % row 2: the number of times we've sighted the feature
-        features        % map state
-        
-        V_est           % estimate of covariance V
-        W_est           % estimate of covariance W
-        
-        robot           % reference to the robot vehicle
-        sensor          % reference to the sensor
-        
-        % FLAGS:
-        %   withMap    estMap       mode
-        %        0          0     dead reckoning
-        %        x          1     SLAM
-        %        1          0     localization
-        
-        mode
-        estMap          % flag: estimating map
-        
-        joseph          % flag: use Joseph form to compute p
-        verbose
-        keepHistory     % keep history
-        P0              % passed initial covariance
-        map             % passed map
-        
-        % HISTORY:
-        % vector of structs to hold EKF history
-        % .x_est estimated state
-        % .odo   vehicle odometry
-        % .P     estimated covariance matrix
-        % .innov innovation
-        % .S
-        % .K     Kalman gain matrix
+        estimateMap
         history
-        dim          % robot workspace dimensions
+        keepHistory
     end
     
     methods
-        function ekf = EKFSLAM(robot, V_est, P0, varargin)
+        
+        function this = EKFSLAM(rob, map, P0)
+            this.rob = rob;
+            this.map = map;
+            this.P0 = P0;
+            this.keepHistory = true;
+            this.estimateMap = true;
             
-            %% mandatory parameters valdiation
-            if nargin < 3
-                error('robot, V_est and P0 are mandatory parameters');
-            end
-            
-            if ~isempty(robot) && ~(isa(robot, 'DifferentialRobot')  || isa(robot, 'Vehicle'))
-                error('expecting DifferentialRobot object');
-            end
-            
-            %% optional parameters validation
-            p = inputParser();
-            p.addOptional('joseph', true, @islogical);
-            p.addOptional('estMap', false, @islogical);
-            p.addOptional('history', true, @islogical);
-            p.addOptional('verbose', false, @islogical);
-            p.addOptional('W', []);
-            p.addOptional('map', []);
-            
-            p.parse(varargin{:});
-            opt = p.Results;
-            
-            if ~isempty(opt.map) && ~isa(opt.map, 'LandmarkMap')
-                error('expecting LandmarkMap object');
-            end          
-            
-            %% copy params to class properties
-            ekf.robot = robot;
-            ekf.V_est = V_est;
-            ekf.P0 = P0;
-            ekf.W_est = opt.W;
-            ekf.verbose = opt.verbose;
-            ekf.keepHistory = opt.history;
-            ekf.joseph = opt.joseph;
-            ekf.map = opt.map;
-            ekf.estMap = opt.estMap;
-            
-            %% figure mode
-            
-            if ekf.estMap
-                ekf.mode = 'SLAM';
-                if isempty(ekf.map)
-                    error('Slam mode needs an inital map (can be empty)');
-                end
-            elseif isempty(ekf.map)
-                ekf.mode = 'dead reckoning';
-            else
-                ekf.mode = 'localization';
-            end
-            
-            ekf.init();
+            this.init();
         end
         
-        function init(ekf)
-            %EKF.init Reset the filter
-            %
-            % E.init() resets the filter state and clears the history.
-            ekf.robot.init();
+        function init(this)
+            this.rob.init();
+            %this.map.init();
             
-            % clear the history
-            ekf.history = [];
+            this.P = this.P0;
+            this.X = this.rob.Xr(:);
             
-            ekf.x_est = ekf.robot.x(:);   
-            ekf.P_est = ekf.P0;               
+            this.history = [];
         end
         
-        function ekf = prediction(ekf, odo)
+        function prediction(this, odo)
             % split the state vector and covariance into chunks for
-            % vehicle and map
-            xv_est = ekf.x_est(1:3);
-            xm_est = ekf.x_est(4:end);
+            % robot and map
+            Xr_est = this.X(1:3);
+            Xm_est = this.X(4:end);
             
-            Pvv_est = ekf.P_est(1:3,1:3);
-            Pmm_est = ekf.P_est(4:end,4:end);
-            Pvm_est = ekf.P_est(1:3,4:end);
+            Prr_est = this.P(1:3,1:3);
+            Pmm_est = this.P(4:end,4:end);
+            Prm_est = this.P(1:3,4:end);
             
             % evaluate the state update function and the Jacobians
             % and predict its covariance
-            xv_pred = ekf.robot.f(xv_est', odo)';
+            Xr_pred = this.rob.f(Xr_est', odo)';
             
-            Fx = ekf.robot.Fx(xv_est, odo);
-            Fv = ekf.robot.Fv(xv_est, odo);
-            Pvv_pred = Fx*Pvv_est*Fx' + Fv*ekf.V_est*Fv';
+            Fx = this.rob.Fx(Xr_est, odo);
+            Fv = this.rob.Fv(Xr_est, odo);
+            Prr_pred = Fx*Prr_est*Fx' + Fv*this.rob.Vr*Fv';
             
             % compute the correlations
-            Pvm_pred = Fx*Pvm_est;
+            Prm_pred = Fx*Prm_est;
             
             Pmm_pred = Pmm_est;
-            xm_pred = xm_est;
+            Xm_pred = Xm_est;
             
             % put the chunks back together again
-            x_pred = [xv_pred; xm_pred];
-            P_pred = [ Pvv_pred Pvm_pred; Pvm_pred' Pmm_pred];
+            this.X = [Xr_pred; Xm_pred];
+            this.P = [Prr_pred Prm_pred; Prm_pred' Pmm_pred];
             
-            % no update phase, estimate is same as prediction
-            x_est = x_pred;
-            P_est = P_pred;
-            innov = [];
-            S = [];
-            K = [];
-            
-            % update the state and covariance for next time
-            ekf.x_est = x_est;
-            ekf.P_est = P_est;
-                                   
-            % record time history
-            if ekf.keepHistory
-                hist = [];
-                hist.xv_est = x_est(1:3);
-                hist.odo = odo;
-                hist.P = P_est;
-                hist.innov = innov;
-                hist.S = S;
-                hist.K = K;
-                ekf.history = [ekf.history hist];
+            if this.estimateMap
+                this.updateMap();
             end
-
             
+            % record time history
+            if this.keepHistory
+                this.saveHistory();
+            end
         end
         
-        %z : feature position
-        %js: feature id
-        %z2: feature range-angle
-        function innovation(ekf, lan)
-            
-            switch ekf.mode
-                case 'dead reckoning'
-                    return;
-                
-                case 'localization'
-                     % compute the innovation                                    
-                    x_pred = ekf.x_est;
-                    P_pred = ekf.P_est;
-                    
-                    xv_pred = x_pred(1:3);
-                                       
-                    % get landmark map
-                    lan_pred = ekf.map.landmarks(lan.id);
-                    
-                    % innovation in range-bearing form
-                    z = lan.h(xv_pred');
-                    z_pred = lan_pred.h(xv_pred');
-                    innov(1) = z(1) - z_pred(1);
-                    innov(2) = angdiff(z(2), z_pred(2));
-                    
-                    Hx = lan_pred.Hx(xv_pred');
-                    Hw = lan_pred.Hw(xv_pred');
-                    
-                    % Update
-                    % compute innovation covariance
-                    S = Hx*P_pred*Hx' + Hw*ekf.W_est*Hw';
-
-                    % compute the Kalman gain
-                    K = P_pred*Hx' / S;
-
-                    % update the state vector
-                    x_est = x_pred + K*innov';
-                
-                    % wrap heading state for a vehicle
-                    x_est(3) = angdiff(x_est(3));
-                
-                    % update the covariance
-                    if ekf.joseph
-                        % we use the Joseph form
-                        I = eye(size(P_pred));
-                        P_est = (I-K*Hx)*P_pred*(I-K*Hx)' + K*ekf.W_est*K';
-                    else
-                        P_est = P_pred - K*S*K';
-                    end
-                    
-                    % enforce P to be symmetric
-                    P_est = 0.5*(P_est+P_est');
-                    % update the state and covariance for next time
-                    ekf.x_est = x_est;
-                    ekf.P_est = P_est;
-                case 'SLAM'
-                    % compute the innovation                                    
-                    x_pred = ekf.x_est;
-                    P_pred = ekf.P_est;
-
-                    % split the state vector and covariance into chunks for
-                    % vehicle and map
-                    xv_pred = x_pred(1:3);
-                    xm_pred = x_pred(4:end);
-                    
-                    z = lan.h(xv_pred');
-                    
-                    if ekf.seenBefore(lan.id)
-                        % get landmark map
-                        lan_pred = ekf.map.landmarks(lan.id);
-                        jx = ekf.features(1,lan.id);
-                        
-                        % innovation in range-bearing form  
-                        z_pred = lan_pred.h(xv_pred');
-                        innov(1) = z(1) - z_pred(1);
-                        innov(2) = angdiff(z(2), z_pred(2));
-                        
-                        % compute Jacobian for this particular feature
-                        Hx_k = lan_pred.Hxf(xv_pred');
-                        
-                        % create the Jacobian for all features
-                        Hx = zeros(2, length(xm_pred));
-                        Hx(:,jx:jx+1) = Hx_k;
-                        Hw = lan_pred.Hw(xv_pred);
-                        
-                        % concatenate Hx for for vehicle and map
-                        Hxv = lan_pred.Hx(xv_pred');
-                        Hx = [Hxv Hx];
-                        
-                        % compute innovation covariance
-                        S = Hx*P_pred*Hx' + Hw*ekf.W_est*Hw';
-                        
-                        % compute the Kalman gain
-                        K = P_pred*Hx' / S;
-
-                        % update the state vector
-                        x_est = x_pred + K*innov';
-
-                        % wrap heading state for a vehicle
-                        x_est(3) = angdiff(x_est(3));
-
-                        % update the covariance
-                        if ekf.joseph
-                            % we use the Joseph form
-                            I = eye(size(P_pred));
-                            P_est = (I-K*Hx)*P_pred*(I-K*Hx)' + K*ekf.W_est*K';
-                        else
-                            P_est = P_pred - K*S*K';
-                        end
-
-                        % enforce P to be symmetric
-                        P_est = 0.5*(P_est+P_est');
-                        
-                        % update landmarks in map
-                        xm_est = x_est(4:end);
-                        for i = 1: length(ekf.map.landmarks)
-                            j = i*2;
-                            ekf.map.landmarks(i).update([xm_est(j-1); xm_est(j)]);
-                        end
-
-                    else
-                        [x_pred, P_pred] = ekf.extendMap(P_pred, xv_pred, xm_pred, lan, z');
-                        x_est = x_pred;
-                        P_est = P_pred;
-                        innov = [];
-                        S = [];
-                        K = [];
-                    end
-                    % update the state and covariance for next time
-                    ekf.x_est = x_est;
-                    ekf.P_est = P_est;
-                otherwise
-                    error('incorrect mode');
+        function innovation(this, feature)
+            if feature.isAnonymous()
+                %% Data asociation
+                mapFeature = this.dataAsociation(feature);              
             end
             
-            %record time history
-             if ekf.keepHistory
-                hist = [];
-                hist.xv_est = x_est(1:3);
-                hist.odo = [];
-                hist.P = P_est;
-                hist.innov = innov;
-                hist.S = S;
-                hist.K = K;
-                ekf.history = [ekf.history hist];
+            X_pred = this.X;
+            Xr_pred = X_pred(1:3);
+            Xm_pred = X_pred(4:end);
+            P_pred = this.P;
+            
+            if isempty(mapFeature) && ~this.estimateMap
+               return; 
             end
-            return;
-            %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             
-            % compute the innovation                                    
-            x_pred = ekf.x_est;
-            P_pred = ekf.P_est;
-            
-            % split the state vector and covariance into chunks for
-            % vehicle and map
-            xv_pred = x_pred(1:3);
-            xm_pred = x_pred(4:end);
-            
-            if ekf.seenBefore(js)
-                % get previous estimate of its state
-                jx = ekf.features(1,js);
-                xf = xm_pred(jx:jx+1);
+            if isempty(mapFeature)
+                %% New feautre: add to map
+                if isa(feature, 'CornerFeature')
+                    this.extendMap(feature);
+                else
+                    if feature.len > 1.5
+                        feature.visibleSide = lineSide(feature.sp, feature.ep, Xr_pred(1:2));
+                        this.extendMap(feature);
+                    end
+                end
                 
-                % transform feature position to polar form
-                %z_pred = cartesian2polar(xf', xv_pred(1:2)', xv_pred(3));
+            else
+                %% Previous feature
+                
+%                 if mapFeature.updates > 5
+%                     
+%                 else
+                    
+                
+                
+                % get the map feature
+                %mapFeature = this.map.features(feature.id);
+                
+                % get the feature index for state vector and covariance matrix
+                %fi = this.featureIndex(mapFeature.id);
                 
                 % innovation in range-bearing form
-                %innov(1) = z2(1) - z_pred(1);
-                %innov(2) = angdiff(z2(2), z_pred(2));
+                z = feature.h(Xr_pred');
+                z_pred = mapFeature.h(Xr_pred');
+                innov(1) = z(1) - z_pred(1);
+                innov(2) = angdiff(z(2), z_pred(2));
+%                 if abs(innov(1)) > 1
+%                     beep;
+%                     return;
+%                 end
                 
-                % innovation in (x,y) form
-                innov = z - xf';
+                if this.estimateMap
+                    % index of the map feature
+                    fi = this.featureIndex(mapFeature.id);
+                    % compute Jacobian for this particular feature
+                    Hx_k = mapFeature.Hxf(Xr_pred');
+                    % create the Jacobian for all features
+                    Hxm = zeros(2, length(Xm_pred));
+                    Hxm(:, fi:fi+1) = Hx_k;
+                else
+                    Hxm = [];
+                end
+                Hxr = mapFeature.Hxr(Xr_pred');
+                Hw = mapFeature.Hw(Xr_pred);
+                Hx = [Hxr Hxm];
                 
-                % get previous estimate of its state
-                jx = ekf.features(1,js);
-                xf = xm_pred(jx:jx+1);
-                
-                % compute Jacobian for this particular feature
-                Hx_k = ekf.sensor.Hxf(xv_pred', xf);
-                
-                % create the Jacobian for all features
-                Hx = zeros(2, length(xm_pred));
-                Hx(:,jx:jx+1) = Hx_k;
-                
-                Hw = ekf.sensor.Hw(xv_pred, xf);
-                
-                % concatenate Hx for for vehicle and map
-                Hxv = ekf.sensor.Hx(xv_pred', xf);
-                Hx = [Hxv Hx];
+                %                 % compute Jacobian for this particular feature
+                %                 Hx_k = mapFeature.Hxf(Xr_pred');
+                %
+                %                 % create the Jacobian for all features
+                %                 Hx = zeros(2, length(Xm_pred));
+                %                 Hx(:, fi:fi+1) = Hx_k;
+                %                 Hw = mapFeature.Hw(Xr_pred);
+                %
+                %                 % concatenate Hx for for robot and map
+                %                 Hxr = mapFeature.Hxr(Xr_pred');
+                %                 Hx = [Hxr Hx];
                 
                 % compute innovation covariance
-                S = Hx*P_pred*Hx' + Hw*ekf.W_est*Hw';
+                S = Hx*P_pred*Hx' + Hw*feature.Vf*Hw';
                 
                 % compute the Kalman gain
                 K = P_pred*Hx' / S;
                 
                 % update the state vector
-                x_est = x_pred + K*innov';
+                X_est = X_pred + K*innov';
                 
                 % wrap heading state for a vehicle
-                x_est(3) = angdiff(x_est(3));
+                X_est(3) = angdiff(X_est(3));
                 
                 % update the covariance
-                if ekf.joseph
-                    % we use the Joseph form
-                    I = eye(size(P_pred));
-                    P_est = (I-K*Hx)*P_pred*(I-K*Hx)' + K*ekf.W_est*K';
-                else
-                    P_est = P_pred - K*S*K';
-                end
+                % we use the Joseph form
+                I = eye(size(P_pred));
+                P_est = (I-K*Hx)*P_pred*(I-K*Hx)' + K*feature.Vf*K';
                 
                 % enforce P to be symmetric
                 P_est = 0.5*(P_est+P_est');
                 
-            else
-                [x_pred, P_pred] = ekf.extendMap(P_pred, xv_pred, xm_pred, z', z2, js);
-                x_est = x_pred;
-                P_est = P_pred;
-                innov = [];
-                S = [];
-                K = [];
+                %                 % update features in map
+                %                 Xm_est = X_est(4:end);
+                %                 Pm_est = P_est(4:end, 4:end);
+                %                 for feature = this.map.features
+                %                     fi = this.featureIndex(feature.id);
+                %                     Xf = Xm_est(fi:fi+1);
+                %                     Pf = Pm_est(fi:fi+1, fi:fi+1);
+                %                     feature.update(Xf, Pf);
+                %                 end
+                
+                this.X = X_est;
+                this.P = P_est;
+                
+                if this.estimateMap
+                    this.updateMap();
+                end
+                
+                % record time history
+%                 if this.keepHistory
+%                     this.saveHistory();
+%                 end
             end
             
-            % update the state and covariance for next time
-            ekf.x_est = x_est;
-            ekf.P_est = P_est;
-            
-            
-            
-            % record time history
-            if ekf.keepHistory
-                hist = [];
-                hist.x_est = x_est;
-                hist.odo = ekf.history(end).odo;
-                hist.P = P_est;
-                hist.innov = innov;
-                hist.S = S;
-                hist.K = K;
-                ekf.history = [ekf.history hist];
-            end
             
         end
         
-        %% Plot methods
-        
-        function plot_xy(ekf, varargin)
-            %EKF.plot_xy Plot vehicle position
-            %
-            % E.plot_xy() overlay the current plot with the estimated vehicle path in
-            % the xy-plane.
-            %
-            % E.plot_xy(LS) as above but the optional line style arguments
-            % LS are passed to plot.
-            %
-            % P = E.plot_xy() returns the estimated vehicle pose trajectory
-            % as a matrix (Nx3) where each row is x, y, theta.
-            %
-            % See also EKF.plot_error, EKF.plot_ellipse, EKF.plot_P.
-            
-                       
-               xyt = zeros(length(ekf.history), 3);
-                for i=1:length(ekf.history)
-                    h = ekf.history(i);
-                    xyt(i,:) = h.x_est(1:3)';
-                end
- 
-                plot(xyt(:,1), xyt(:,2), varargin{:}); 
-        end
-        
-        function out = plot_error(ekf, varargin)
-            %EKF.plot_error Plot vehicle position
-            %
-            % E.plot_error(OPTIONS) plot the error between actual and estimated vehicle
-            % path (x, y, theta).  Heading error is wrapped into the range [-pi,pi)
-            %
-            % OUT = E.plot_error() is the estimation error versus time as a matrix (Nx3)
-            % where each row is x, y, theta.
-            %
-            % Options::
-            % 'bound',S         Display the S sigma confidence bounds (default 3).
-            %                   If S =0 do not display bounds.
-            % 'boundcolor',C    Display the bounds using color C
-            % LS                Use MATLAB linestyle LS for the plots
-            %
-            % Notes::
-            % - The bounds show the instantaneous standard deviation associated
-            %   with the state.  Observations tend to decrease the uncertainty
-            %   while periods of dead-reckoning increase it.
-            % - Ideally the error should lie "mostly" within the +/-3sigma
-            %   bounds.
-            %
-            % See also EKF.plot_xy, EKF.plot_ellipse, EKF.plot_P.
-            opt.bounds = 3;
-            opt.boundcolor = 'r';
-            
-            [opt,args] = tb_optparse(opt, varargin);
-            
-            
-                err = zeros(length(ekf.history), 3);
-                for i=1:length(ekf.history)
-                    h = ekf.history(i);
-                    % error is true - estimated
-                    err(i,:) = ekf.robot.x_hist(i,:) - h.x_est(1:3)';
-                    err(i,3) = angdiff(err(i,3));
-                    P = diag(h.P);
-                    pxy(i,:) = opt.bounds*sqrt(P(1:3));
-                end
-                if nargout == 0
-                    clf
-                    t = 1:numrows(pxy);
-                    t = [t t(end:-1:1)]';
-                    
-                    subplot(311)
-                    if opt.bounds
-                        edge = [pxy(:,1); -pxy(end:-1:1,1)];
-                        h = patch(t, edge ,opt.boundcolor);
-                        set(h, 'EdgeColor', 'none', 'FaceAlpha', 0.3);
-                        hold on
-                        plot(err(:,1), args{:});
-                        hold off
-                    end
-                    grid
-                    ylabel('x error')
-                    
-                    subplot(312)
-                    edge = [pxy(:,2); -pxy(end:-1:1,2)];
-                    h = patch(t, edge, opt.boundcolor);
-                    set(h, 'EdgeColor', 'none', 'FaceAlpha', 0.3);
-                    hold on
-                    plot(err(:,2), args{:});
-                    hold off
-                    grid
-                    ylabel('y error')
-                    
-                    subplot(313)
-                    edge = [pxy(:,3); -pxy(end:-1:1,3)];
-                    h = patch(t, edge, opt.boundcolor);
-                    set(h, 'EdgeColor', 'none', 'FaceAlpha', 0.3);
-                    hold on
-                    plot(err(:,3), args{:});
-                    hold off
-                    grid
-                    xlabel('time (samples)')
-                    ylabel('\theta error')
-                else
-                    out = pxy;
-                end
-            
-        end
-        
-        
-    end % public methods
+    end
     
-    methods (Access=protected)
-        function s = seenBefore(ekf, jf)
-            if  size(ekf.features, 2) >= jf && ekf.features(1,jf) > 0
-                %% we have seen this feature before, update number of sightings
-                if ekf.verbose
-                    fprintf('feature %d seen %d times before, state_idx=%d\n', ...
-                        jf, ekf.features(2,jf), ekf.features(1,jf));
-                end
-                ekf.features(2,jf) = ekf.features(2,jf)+1;
-                s = true;
-            else
-                s = false;
+    methods (Access = private)
+        
+        function saveHistory(this)
+            hist = [];
+            hist.Xr = this.X(1:3);
+            hist.Pr = this.P(1:3, 1:3);
+            hist.X = this.X;
+            hist.P = this.P;
+            this.history = [this.history hist];
+        end
+        
+        function updateMap(this)
+            Xm = this.X(4:end);
+            Pm = this.P(4:end, 4:end);
+            for feature = this.map.features
+                fi = this.featureIndex(feature.id);
+                Xf = Xm(fi:fi+1);
+                Pf = Pm(fi:fi+1, fi:fi+1);
+                feature.update(Xf, Pf);
             end
         end
         
-        
-        function [x_ext, P_ext] = extendMap(ekf, P, xv, xm, lan, z)% xf, z, jf)
-            
-            %% this is a new feature, we haven't seen it before
-            % estimate position of feature in the world based on
-            % noisy sensor reading and current vehicle pose
-            
-            if ekf.verbose
-                fprintf('feature %d first sighted\n', lan.id);
-            end
-            
-            xf = lan.pos;
-            
-            % estimate its position based on observation and vehicle state
-            %xf = ekf.sensor.g(xv, z)';
-            
-            % append this estimate to the state vector
-            x_ext = [xv; xm; xf];
+        function mapFeature = dataAsociation(this, feature)
+            mapFeature = [];
+            X_pred = this.X;
+            Xr_pred = X_pred(1:3);
+            Xm_pred = X_pred(4:end);
+            P_pred = this.P;
+            if isa(feature, 'CornerFeature')
+                candidates = [];
+                z = feature.h(Xr_pred');
+                for corner = this.map.corners
+                    if this.estimateMap
+                        % index of the map feature
+                        fi = this.featureIndex(corner.id);
+                        % compute Jacobian for this particular feature
+                        Hx_k = corner.Hxf(Xr_pred');
+                        % create the Jacobian for all features
+                        Hxm = zeros(2, length(Xm_pred));
+                        Hxm(:, fi:fi+1) = Hx_k;
+                    else
+                        Hxm = [];
+                    end
+                    Hxr = corner.Hxr(Xr_pred');
+                    Hw = corner.Hw(Xr_pred);
+                    Hx = [Hxr Hxm];
+                    
+                    % compute innovation covariance
+                    S = Hx*P_pred*Hx' + Hw*feature.Vf*Hw';
+                    
+                    % innovation in range-bearing form
+                    
+                    z_pred = corner.h(Xr_pred');
+                    innov(1) = z(1) - z_pred(1);
+                    innov(2) = angdiff(z(2), z_pred(2));
 
+                    md = innov*(S\innov');
+                    
+                    if md^2 < 10
+                        candidate.corner = corner;
+                        candidate.md = md;
+                        mapFeature= corner;
+                        candidates = [candidates; candidate];
+                    end
+                end
+                if ~isempty(candidates)
+                    if size(candidates,1) == 1
+                        mapFeature = candidates(1).corner;
+                    else
+                        % chose the best segment and delete the rest
+                        
+                        %segs = [candidates.segment];
+                        %[~, i] = max([segs.len]);
+                        [~, i] = min([candidates.md]);
+                        mapFeature = candidates(i).corner;
+                        if this.estimateMap
+                            % delete the other segments
+                            for j = 1:length(candidates)
+                                if  j ~= i
+                                    this.deleteFeature(candidates(j).corner);
+                                    beep
+                                end
+                            end
+                        end
+                    end
+                end
+            else
+                candidates = [];
+                side = lineSide(feature.sp, feature.ep, Xr_pred(1:2));
+                z = feature.h(Xr_pred);
+                for segment = this.map.segments
+  
+                    if ~feature.overlaps(segment, 1)
+                        continue;
+                    end
+                    
+                    if side ~= segment.visibleSide
+                        continue;
+                    end
+
+                    ed = point2segment(feature.ep', segment.ep', segment.sp');
+                    sd = point2segment(feature.sp', segment.ep', segment.sp');
+                    if ed > 1 || sd > 1
+                        continue;
+                    end
+
+                    if this.estimateMap
+                        % index of the map feature
+                        fi = this.featureIndex(segment.id);
+                        % compute Jacobian for this particular feature
+                        Hx_k = segment.Hxf(Xr_pred);
+                        % create the Jacobian for all features
+                        Hxm = zeros(2, length(Xm_pred));
+                        Hxm(:, fi:fi+1) = Hx_k;
+                    else
+                        Hxm = [];
+                    end
+                    Hxr = segment.Hxr(Xr_pred);
+                    Hw = segment.Hw(Xr_pred);
+                    Hx = [Hxr Hxm];
+
+                    % compute innovation covariance
+                    S = Hx*P_pred*Hx' + Hw*feature.Vf*Hw';
+
+                    % innovation in range-bearing form
+
+                    z_pred = segment.h(Xr_pred);
+                    innov(1) = z(1) - z_pred(1);
+                    innov(2) = angdiff(z(2), z_pred(2));
+
+%                     if innov(1) > 0.2 || innov(2) > 20*pi/180
+%                        continue; 
+%                     end
+%                     
+                    md = innov*(S\innov');
+                    if md > 10
+                       continue; 
+                    end
+%                     md = ed + sd;
+%                     if ed+sd < 5
+                        candidate.segment = segment;
+                        candidate.md = md;
+                        candidates = [candidates; candidate];
+
+%                     end
+                end
+                if isempty(candidates) && ...
+                    ~isempty(this.map.segments) ...
+                    && feature.len > 1
+                    
+                    disp('empty!');
+                    
+                end
+                if ~isempty(candidates)
+                        % chose the best segment and delete the rest
+                        
+                        %segs = [candidates.segment];
+                        %[~, i] = max([segs.len]);
+                        [~, i] = min([candidates.md]);
+                        mapFeature = candidates(i).segment;
+                        if this.estimateMap
+                            % update length of the map segment
+                            segs = [candidates.segment feature];
+                            mapFeature.s = min([segs.s]);
+                            mapFeature.e = max([segs.e]);
+                        
+                            % delete the other segments
+                            for j = 1:length(candidates)
+                                if  j ~= i && candidates(j).segment.updates < 10
+                                    this.deleteFeature(candidates(j).segment);
+                                end
+                            end
+                        end
+                    
+                end
+            end
+        end
+        
+        function extendMap(this, feature)
+            % split the state vector and covariance into chunks for
+            % vehicle and map
+            Xr = this.X(1:3);
+            Xm = this.X(4:end);
+            
+            % extend the state vector
+            Xf = feature.Xf(:);
+            X_ext = [Xr; Xm; Xf(1:2)];
+            
             
             % get the Jacobian for the new feature
-            Gz = lan.Gz(xv, z);
+            z = feature.h(Xr');
+            Gz = feature.Gz(Xr, z);
             
-            % extend the covariance matrix           
-            Gx = lan.Gx(xv, z);
-            n = length(ekf.x_est);
+            % extend the covariance matrix
+            Gx = feature.Gx(Xr, z);
+            n = length(this.X);
             M = [eye(n) zeros(n,2); Gx zeros(2,n-3) Gz];
-            P_ext = M*blkdiag(P, ekf.W_est)*M';
- 
+            P_ext = M*blkdiag(this.P, feature.Vf)*M';
+            
+            % add the feature to the map and obtain its id
+            this.map.addFeature(feature);
             
             % record the position in the state vector where this
             % feature's state starts
-            jf = lan.id;
-            ekf.features(1,jf) = length(xm)+1;
-            %ekf.features(1,jf) = length(ekf.x_est)-1;
-            ekf.features(2,jf) = 1;        % seen it once
+            this.featureIndex(feature.id) = length(Xm) + 1;
             
-            if ekf.verbose
-                fprintf('extended state vector\n');
-            end
+            this.X = X_ext;
+            this.P = P_ext;
+        end
+        
+        function deleteFeature(this, feature)
+            fi = this.featureIndex(feature.id);
+            % update index of features with a greater id
+            this.featureIndex(feature.id:end) = ...
+                this.featureIndex(feature.id:end) - 2;
             
-            % plot an ellipse at this time
-            %                jx = features(1,jf);
-            %                plot_ellipse(x_est(jx:jx+1), P_est(jx:jx+1,jx:jx+1), 5);
+            this.featureIndex(feature.id) = NaN;
+            % delete feature from state vector and covariance matrix
+            n = size(this.P, 1);
+            ir = 1:1:n;
+            irv = ir ~= 3+fi & ir ~= 4+fi;
+            
+            this.X = this.X(irv);
+            this.P = this.P(irv, irv);
+            
+            this.map.deleteFeature(feature);
             
         end
+        
+        
+        
+        
     end
     
 end

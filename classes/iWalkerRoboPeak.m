@@ -35,6 +35,10 @@ classdef iWalkerRoboPeak < iWalkerInterface
            this.log.lidar.angle.Name = 'scan angle';
            this.log.lidar.angle.DataInfo.Units = 'degrees';
            
+           this.log.lidar.quality = timeseries();
+           this.log.lidar.quality.Name = 'scan quality';
+           this.log.lidar.quality.DataInfo.Units = 'scalar';
+           
            this.log.lidar.freq = timeseries();
            this.log.lidar.freq.Name = 'scan frequency';
            this.log.lidar.freq.DataInfo.Units = 'Hz';
@@ -48,7 +52,6 @@ classdef iWalkerRoboPeak < iWalkerInterface
             data = double(this.canusb.read(772));
             ldata = double(this.canusb.read(768));
             rdata = double(this.canusb.read(769));
-            
             x =     iWalkerInterface.bytes2double(data(1),data(2));
             y =     iWalkerInterface.bytes2double(data(3),data(4));
             th =    iWalkerInterface.bytes2double(data(7),data(8));
@@ -67,7 +70,7 @@ classdef iWalkerRoboPeak < iWalkerInterface
             try
                 timestamp = toc;
                 d = [];
-                [d.freq, d.count, d.range, d.angle] = this.lidar.getScan();
+                [d.freq, d.count, d.range, d.angle, d.quality] = this.lidar.getScan();
                 d.angle = mod(d.angle + 180, 360);
                 if isempty(this.log.lidar.range.Time)
                     dt = 0;
@@ -80,6 +83,7 @@ classdef iWalkerRoboPeak < iWalkerInterface
                 this.log.lidar.count = this.log.lidar.count.addsample('Time', timestamp, 'Data', d.count);
                 this.log.lidar.range = this.log.lidar.range.addsample('Time', timestamp, 'Data', d.range);
                 this.log.lidar.angle = this.log.lidar.angle.addsample('Time', timestamp, 'Data', d.angle);
+                this.log.lidar.quality = this.log.lidar.quiality.addsample('Time', timestamp, 'Data', d.quality);
             catch
                 
             end
